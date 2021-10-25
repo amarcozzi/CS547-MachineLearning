@@ -29,6 +29,8 @@ for year in years:
         # merge the temp raster with the accumulator
         accumulator = temp_raster.where(temp_raster > 0, accumulator, drop=False)
 
+    # Reproject the raster to NAD83
+    accumulator = accumulator.rio.reproject("EPSG:5070")
     accumulator.rio.to_raster(f"Data/accumulated_fires/{year}-fires.tif")
     accumulator = None
     temp_raster = None
