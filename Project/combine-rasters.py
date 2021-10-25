@@ -4,44 +4,36 @@ import numpy as np
 import xarray as xr
 import rioxarray as rioxr
 from utils import *
+from rioxarray.merge import merge_arrays
+import multiprocessing
+import threading
 
+from dask.distributed import Client, LocalCluster, Lock
+from dask.utils import SerializableLock
+
+# xr.set_options(file_cache_maxsize=2)
 sys.setrecursionlimit(10000)
 
 if sys.platform == "linux":
     directory = "Aviation/fire_spread_analysis/burned_area_files/"
 else:
-    directory = None
+    directory = "Aviation/fire_spread_analysis/burned_area_files/"
 
-accum = 0
 year = 2005
 start_month = 5
 end_month = 11
 
-# Load in the first raster for the selected year
-filename, jd = build_filename(year, start_month)
-dxr = rioxr.open_rasterio(directory + filename)
-accumulator = xr.where(dxr > 0, dxr, 0.)
+# Load in the accumulated raster for the selected year
+# test = xr.open_rasterio(f'Data/accumulated_fires/{year}-fires.tif')
 
-d1 = xr.open_rasterio(directory + filename)
-d = d1.squeeze().values
-accum = np.zeros(d.shape, dtype=np.int16)
-accum[d>0] = d[d>0]
+accumulator = rioxr.open_rasterio(f'Data/accumulated_fires/{year}-fires.tif')
 
-for month in range(start_month + 1, end_month):
-    filename, jd = build_filename(year,month)
-    path = directory + filename
+# Test load in FWI
+test = xr.open_dataarray('/Users/anthony/CompSci/UMontana/2021_Fall/CS547-ML/Project/Aviation/fire_spread_analysis/fwi_files/ECMWF_FWI_FWI_20010501_1200_hr_v3.1_con.nc', decode_coords="all")
+fwi_raster = rioxr.open_rasterio('/Users/anthony/CompSci/UMontana/2021_Fall/CS547-ML/Project/Aviation/fire_spread_analysis/fwi_files/ECMWF_FWI_FWI_20010501_1200_hr_v3.1_con.nc')
 
-    # rio xarray approach
-    temp_raster = rioxr.open_rasterio(path)
-    accumulator = xr.where(temp_raster > 0, temp_raster, accumulator)
-
-    # Numpy approach
-    d1 = xr.open_rasterio(path)
-    d = d1.squeeze().values
-    accum[d>0] = d[d>0]
-
-if np.all(accumulator.values.squeeze() == accum):
-    print('!worked!')
+# Test load in the dem
+dem_raster = rioxr.open_rasterio('Data/LC16_Elev_200.tif', chunks=True, cache=False)
 
 label_array = label_array_func(accumulator.values.squeeze())
 
@@ -60,10 +52,21 @@ for fid in range(2, label_array.max()):
         lon_min, lon_max = int(1e8), -1000
         for d in range(start, stop + 1):
 
-            condition = np.logical_and(accumulator == d, label_array == fid)
-            row, col = np.where(condition.values.squeeze())
-            latitude = accumulator.y.values[row]
-            longitude = accumulator.x.values[col]
+            # Process the first day of the fire data:
+            if d == start:
+                condition = np.logical_and(accumulator == d, label_array == fid)
+                row, col = np.where(condition.values.squeeze())
+                latitude = accumulator.y.values[row]
+                longitude = accumulator.x.values[col]
+
+            else:
+                row_slice = slice(min(row_min-500, 0), max(row_max+500, accumulator.shape[0]))
+                col_slice = slice(min(col_min - 500, 0), max(col_max + 500, accumulator.shape[1]))
+                condition = np.logical_and(accumulator[0, row_slice, col_slice] == d,
+                                           label_array[row_slice, col_slice] == fid)
+                row, col = np.where(condition.values.squeeze())
+                latitude = accumulator.y.values[row]
+                longitude = accumulator.x.values[col]
 
             # Keep track of bounding box around fire
             if row.size > 0:
@@ -87,4 +90,9 @@ for fid in range(2, label_array.max()):
 
         print(f'Got bounding box around fire {fid}')
         accum_subset = accumulator.rio.slice_xy(lon_min, lat_min, lon_max, lat_max)
+
+        # Reproject accumulator
+        # reprojected_accumulator = accum_subset.rio.reproject_match(dem_raster)
+        reprojected_accumulator = accum_subset.rio.reproject(dem_raster.rio.crs)
+        print(f'Before: {accum_subset.rio.crs}, After: {reprojected_accumulator.rio.crs}')
         print('test')
