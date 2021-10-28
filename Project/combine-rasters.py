@@ -26,11 +26,11 @@ end_month = 11
 # Load in the accumulated raster for the selected year
 # test = xr.open_rasterio(f'Data/accumulated_fires/{year}-fires.tif')
 
-accumulator = rioxr.open_rasterio(f'Data/accumulated_fires/{year}-fires.tif')
+# accumulator = rioxr.open_rasterio(f'Data/accumulated_fires/{year}-fires.tif')
 
 # Test load in FWI
-test = xr.open_dataarray('/Users/anthony/CompSci/UMontana/2021_Fall/CS547-ML/Project/Aviation/fire_spread_analysis/fwi_files/ECMWF_FWI_FWI_20010501_1200_hr_v3.1_con.nc', decode_coords="all")
-fwi_raster = rioxr.open_rasterio('/Users/anthony/CompSci/UMontana/2021_Fall/CS547-ML/Project/Aviation/fire_spread_analysis/fwi_files/ECMWF_FWI_FWI_20010501_1200_hr_v3.1_con.nc')
+# test = xr.open_dataarray('/Users/anthony/CompSci/UMontana/2021_Fall/CS547-ML/Project/Aviation/fire_spread_analysis/fwi_files/ECMWF_FWI_FWI_20010501_1200_hr_v3.1_con.nc', decode_coords="all")
+# fwi_raster = rioxr.open_rasterio('/Users/anthony/CompSci/UMontana/2021_Fall/CS547-ML/Project/Aviation/fire_spread_analysis/fwi_files/ECMWF_FWI_FWI_20010501_1200_hr_v3.1_con.nc')
 
 # Test load in the dem
 dem_raster = rioxr.open_rasterio('Data/LC16_Elev_200.tif', chunks=True, cache=False)
