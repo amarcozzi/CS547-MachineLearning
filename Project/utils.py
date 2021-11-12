@@ -82,3 +82,30 @@ def label_cluster(pos, a, l):
     for n_pos in nn:
         if a[tuple(n_pos)] == 1:
             label_cluster(tuple(n_pos), a, l)
+
+
+def test_raster_bounds(a, b):
+    if a[0] >= b[0] or a[1] >= b[1] or a[2] <= b[2] or a[3] <= b[3]:
+        return False
+    return True
+
+
+def prune_ts(l):
+    mv = max(l)
+    mv_ind = l.index(mv)
+    nl = []
+    v = -1
+    i = mv_ind
+    while v != 0 and i != -1:
+        v = l[i]
+        nl.insert(0,v)
+        i-=1
+    min_ind=i
+    v = -1
+    i = mv_ind+1
+    while v != 0 and i != len(l):
+        v = l[i]
+        nl.append(v)
+        i+=1
+    max_ind = i
+    return nl,range(min_ind,max_ind-1)

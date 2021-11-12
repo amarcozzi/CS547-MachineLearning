@@ -5,6 +5,8 @@ import xarray as xr
 import rioxarray as rioxr
 from utils import *
 
+sys.setrecursionlimit(10000)
+
 in_dir = "Aviation/fire_spread_analysis/burned_area_files/"
 years = range(2001, 2020)
 start_month = 5
@@ -29,8 +31,14 @@ for year in years:
         # merge the temp raster with the accumulator
         accumulator = temp_raster.where(temp_raster > 0, accumulator, drop=False)
 
+    print('test')
+    l = label_array_func(accumulator.values.squeeze())
+    print('test')
+
     # Reproject the raster to NAD83
     accumulator = accumulator.rio.reproject("EPSG:5070")
-    accumulator.rio.to_raster(f"Data/accumulated_fires/{year}-fires.tif")
-    accumulator = None
-    temp_raster = None
+    accumlator = accumulator.rio.to_raster(f"/media/anthony/Storage_1/aviation_data/accumulated_fires/{year}-fires.tif")
+    l = label_array_func(accumulator.values.squeeze())
+    print('test')
+    # accumulator = None
+    # temp_raster = None

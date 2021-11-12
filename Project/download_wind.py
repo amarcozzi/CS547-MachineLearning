@@ -1,49 +1,32 @@
 import cdsapi
+import numpy as np
+from calendar import monthrange
 
 c = cdsapi.Client()
 
-c.retrieve(
-    'reanalysis-era5-single-levels',
-    {
-        'product_type': 'reanalysis',
-        'format': 'netcdf',
-        'variable': [
-            '10m_u_component_of_wind', '10m_v_component_of_wind', '10m_wind_gust_since_previous_post_processing',
-            '2m_temperature',
-        ],
-        'month': [
-            '01', '02', '03',
-            '04', '05', '06',
-            '07', '08', '09',
-            '10', '11', '12',
-        ],
-        'day': [
-            '01', '02', '03',
-            '04', '05', '06',
-            '07', '08', '09',
-            '10', '11', '12',
-            '13', '14', '15',
-            '16', '17', '18',
-            '19', '20', '21',
-            '22', '23', '24',
-            '25', '26', '27',
-            '28', '29', '30',
-            '31',
-        ],
-        'year': '2020',
-        'area': [
-            49.34, -124.78, -24.74,
-            -66.95,
-        ],
-        'time': [
-            '00:00', '01:00', '02:00',
-            '03:00', '04:00', '05:00',
-            '06:00', '07:00', '08:00',
-            '09:00', '10:00', '11:00',
-            '12:00', '13:00', '14:00',
-            '15:00', '16:00', '17:00',
-            '18:00', '19:00', '20:00',
-            '21:00', '22:00', '23:00',
-        ],
-    },
-    'Data/2020-winds.nc')
+# Loop to plot over:
+for year in np.arange(2001, 2021):
+    for month in np.arange(5, 11):
+        week_day, days_in_month = monthrange(year, month)
+        for day in range(1, days_in_month + 1):
+            print("****************************************************************")
+            print("**** Acquiring wind data for %i %i %i ****" % (year, month, day))
+            print("****************************************************************")
+
+            c.retrieve(
+                'reanalysis-era5-single-levels',
+                {
+                    'product_type': 'reanalysis',
+                    'format': 'netcdf',
+                    'variable': [
+                        '10m_u_component_of_wind', '10m_v_component_of_wind', '10m_wind_gust_since_previous_post_processing',
+                    ],
+                    'month': str(month),
+                    'day': str(day),
+                    'year': str(year),
+                    'area': [
+                        49.34, -124.78, -24.74,
+                        -66.95,
+                    ],
+                },
+                f'/media/anthony/Storage_1/aviation_data/wind_{year}_{month}_{day}.nc')
