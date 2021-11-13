@@ -6,6 +6,7 @@ import rasterio as rio
 import xarray as xr
 import rioxarray as rioxr
 from utils import *
+from rioxarray.exceptions import NoDataInBounds
 from rioxarray.merge import merge_arrays
 
 sys.setrecursionlimit(10000)
@@ -23,6 +24,10 @@ start_month = 5
 end_month = 11
 
 for year in years:
+
+    if year != 2019:
+        continue
+
     print(f'Accumulating year: {year}')
 
     # Load in the first raster for the selected year
@@ -59,8 +64,6 @@ for year in years:
         # Let's get rid of the tiny fires
         if num_days_in_ts < 5:
             continue
-
-
 
         row_min, row_max = int(1e8), -1
         col_min, col_max = int(1e8), -1
@@ -113,13 +116,26 @@ for year in years:
         bounds = accum_subset.rio.bounds()
 
         # Sample the DEM and SB40 raster
-        dem_subset = dem_raster.rio.clip_box(*bounds)
-        sb40_subset = sb40_raster.rio.clip_box(*bounds)
+        try:
+            dem_subset = dem_raster.rio.clip_box(*bounds)
+        except NoDataInBounds:
+            print('No data in bounds - DEM')
+            continue
+        try:
+            sb40_subset = sb40_raster.rio.clip_box(*bounds)
+        except NoDataInBounds:
+            print('No data in bounds - SB40')
+            continue
 
         # Skip over entries outside the U.S.
-        invalid_subset_flag = (dem_subset.max() == -9999 and dem_subset.min() < -1000) or (sb40_subset.max() == -9999
-                                                                                           and sb40_subset < -1000)
-        if invalid_subset_flag:
+        invalid_DEM_flag = dem_subset.max() == -9999 or dem_subset.min() == -9999
+        if invalid_DEM_flag:
+            print('no-data values present in DEM')
+            continue
+
+        invalid_SB40_flag = sb40_subset.max() == -9999 or sb40_subset.min() == -9999
+        if invalid_SB40_flag:
+            print('no-data values present in SB40')
             continue
 
         print("Processing fire %i of %i." % (fid, label_array.max()))
@@ -139,9 +155,12 @@ for year in years:
             try:
                 fwi_raster = rioxr.open_rasterio(os.path.join(store_path, f'FWI/fwi-{year}-{month}-{day}.tif'))
                 day, month = date.day, date.month
-                gust_raster = rioxr.open_rasterio(os.path.join(store_path, 'winds', f'wind-gust-{year}-{month}-{day}.tif'), mask_and_scale=True)
-                u_raster = rioxr.open_rasterio(os.path.join(store_path, 'winds', f'wind-u-{year}-{month}-{day}.tif'), mask_and_scale=True)
-                v_raster = rioxr.open_rasterio(os.path.join(store_path, 'winds', f'wind-v-{year}-{month}-{day}.tif'), mask_and_scale=True)
+                gust_raster = rioxr.open_rasterio(
+                    os.path.join(store_path, 'winds', f'wind-gust-{year}-{month}-{day}.tif'), mask_and_scale=True)
+                u_raster = rioxr.open_rasterio(os.path.join(store_path, 'winds', f'wind-u-{year}-{month}-{day}.tif'),
+                                               mask_and_scale=True)
+                v_raster = rioxr.open_rasterio(os.path.join(store_path, 'winds', f'wind-v-{year}-{month}-{day}.tif'),
+                                               mask_and_scale=True)
             except FileNotFoundError:
                 print('Could not find daily raster')
                 continue
@@ -153,10 +172,11 @@ for year in years:
             v_match = v_raster.rio.reproject_match(dem_subset, resampling=3)
 
             # Assign all of the pixels already burned to 0
-            accum_today = accum_subset.where(accum_subset.values.squeeze() <= jday, 0.)
-            accum_today.values.squeeze()[tuple(accum_today > 0)] = 1.
-            accum_tomorrow = accum_subset.where(accum_subset.values.squeeze() <= jday+1, 0.)
-            accum_tomorrow.values.squeeze()[tuple(accum_tomorrow > 0)] = 1.
+            accum_today = accum_subset.where(accum_subset.values.squeeze() <= jday, 0)
+            accum_today.values.squeeze()[tuple(accum_today > 0)] = 1
+            accum_tomorrow = accum_subset.where(accum_subset.values.squeeze() <= jday + 1, 0)
+            accum_tomorrow.values.squeeze()[tuple(accum_tomorrow > 0)] = 1
+            accum_tomorrow.values.squeeze()[tuple(accum_subset == jday+1)] = 2
 
             # Match the accumulated subset to the DEM
             accum_today = accum_today.rio.reproject_match(dem_subset)
@@ -167,5 +187,4 @@ for year in years:
                 [accum_today, dem_subset, sb40_match, fwi_match, u_match, v_match, gust_match, accum_tomorrow],
                 dim='band')
             fname = f'{year}-{fid}-{month}-{jday}.tif'
-            all_together.rio.to_raster(os.path.join(store_path, 'dataset', fname))
-            print(f'Wrote raster for day {jday} - fire {fid}')
+            all_together.rio.to_raster(os.path.join(store_path, 'dataset', fname), dtype=np.float32)
