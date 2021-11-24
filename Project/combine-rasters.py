@@ -10,7 +10,9 @@ from rioxarray.exceptions import NoDataInBounds
 from rioxarray.merge import merge_arrays
 
 sys.setrecursionlimit(10000)
+prune_data_flag = True
 store_path = '/media/anthony/Storage_1/aviation_data'
+out_folder = 'dataset-pruned-padded-40-max'
 
 # Load in the dem
 dem_raster = rioxr.open_rasterio(os.path.join(store_path, 'LC16_Elev_200.tif'))
@@ -28,89 +30,76 @@ for year in years:
     if year != 2019:
         continue
 
-    print(f'Accumulating year: {year}')
-
-    # Load in the first raster for the selected year
-    print(f'Accumulating month {start_month}')
-    filename, jd = build_filename(year, start_month)
-    dxr = rioxr.open_rasterio(os.path.join(in_dir, filename))
-    accumulator = dxr.where(dxr > 0, 0., drop=False)
-
-    for month in range(start_month + 1, end_month):
-        print(f'Accumulating month {month}')
-
-        # Load in the month's raster
-        filename, jd = build_filename(year, month)
-        path = os.path.join(in_dir, filename)
-        temp_raster = rioxr.open_rasterio(path)
-
-        # merge the temp raster with the accumulator
-        accumulator = temp_raster.where(temp_raster > 0, accumulator, drop=False)
+    accumulator = accumulate_year(year, start_month, end_month, in_dir)
     res = accumulator.rio.resolution()[0]
 
     # Label accumulated fires
     print(f'Labeling fires in year {year}')
     label_array = label_array_func(accumulator.values.squeeze())
 
+    print('Finding maximum raster shape')
+    # if year == 2019:
+    #     max_shape = [57, 101]
+    # else:
+    # max_shape = get_max_shape(accumulator, label_array, prune_data_flag, res, 4)
+    max_shape = (40, 40)
+
     # Loop over all fires in the year
     for fid in range(2, label_array.max()):
-        days = accumulator.values.squeeze()[label_array == fid]
-        start = int(days.min())
-        stop = int(days.max())
-        pixels_burned_time_series = [days[days == i].size for i in range(start, stop + 1)]
-        pruned_ts, ts_ind = prune_ts(pixels_burned_time_series)
-        num_days_in_ts = len(pruned_ts)
 
-        # Let's get rid of the tiny fires
-        if num_days_in_ts < 5:
+        days = get_fire_days(accumulator, label_array, fid, prune_data_flag)
+        if not days:
+            continue
+        else:
+            start, stop = days
+
+        vals = find_fire_size(start, stop, accumulator, label_array, fid)
+        row_min, row_max, col_min, col_max, lat_min, lat_max, lon_min, lon_max = vals
+
+        # Match the shape of the subset to the maximum extracted shape
+        accum_test = accumulator[..., row_min:row_max, col_min:col_max]
+        test_shape = accum_test.values.shape[-2:]
+        if np.any(np.array(test_shape) > np.array(max_shape)):
+            print('Fire too big')
             continue
 
-        row_min, row_max = int(1e8), -1
-        col_min, col_max = int(1e8), -1
-        lat_min, lat_max = int(1e8), -1
-        lon_min, lon_max = int(1e8), -1000
-        for d in range(start, stop + 1):
+        row_diff = row_max - row_min
+        col_diff = col_max - col_min
+        if row_diff < max_shape[0]:
+            max_diff = max_shape[0] - row_diff
+            row_min -= max_diff // 2
+            row_max += max_diff // 2
+            if max_diff % 2 != 0:
+                row_max += 1
+        row_diff = row_max - row_min
+        if row_diff != max_shape[0]:
+            print(f'Shape error for fire {fid}')
+            quit()
 
-            # Process the first day of the fire data:
-            if d == start:
-                condition = np.logical_and(accumulator == d, label_array == fid)
-                row, col = np.where(condition.values.squeeze())
-                latitude = accumulator.y.values[row]
-                longitude = accumulator.x.values[col]
-
-            else:
-                row_slice = slice(min(row_min - 500, 0), max(row_max + 500, accumulator.shape[0]))
-                col_slice = slice(min(col_min - 500, 0), max(col_max + 500, accumulator.shape[1]))
-                condition = np.logical_and(accumulator[0, row_slice, col_slice] == d,
-                                           label_array[row_slice, col_slice] == fid)
-                row, col = np.where(condition.values.squeeze())
-                latitude = accumulator.y.values[row]
-                longitude = accumulator.x.values[col]
-
-            # Keep track of bounding box around fire
-            if row.size > 0:
-                if row.min() < row_min:
-                    row_min = row.min()
-                if row.max() > row_max:
-                    row_max = row.max()
-                if col.min() < col_min:
-                    col_min = col.min()
-                if col.max() > col_max:
-                    col_max = col.max()
-                if latitude.min() < lat_min:
-                    lat_min = latitude.min()
-                if latitude.max() > lat_max:
-                    lat_max = latitude.max()
-                if longitude.min() < lon_min:
-                    lon_min = longitude.min()
-                if longitude.max() > lon_max:
-                    lon_max = longitude.max()
+        if col_diff < max_shape[1]:
+            max_diff = max_shape[1] - col_diff
+            col_min -= max_diff // 2
+            col_max += max_diff // 2
+            if max_diff % 2 != 0:
+                col_max += 1
+        col_diff = col_max - col_min
+        if col_diff != max_shape[1]:
+            print(f'Shape error for fire {fid}')
+            quit()
 
         # Draw a box around the lat/long of the fire and reproject to EPSG 5070
-        n = 4
-        accum_subset = accumulator.rio.clip_box(minx=lon_min - n * res, miny=lat_min - n * res, maxx=lon_max + n * res,
-                                                maxy=lat_max + n * res, auto_expand=True)
-        accum_subset = accum_subset.rio.reproject('EPSG:5070', nodata=0.)
+        # n = 4
+        # accum_subset = accumulator.rio.clip_box(minx=lon_min - n * res, miny=lat_min - n * res, maxx=lon_max + n * res,
+        #                                         maxy=lat_max + n * res, auto_expand=True)
+        # accum_subset = accum_subset.rio.reproject('EPSG:5070', nodata=0.)
+
+        # Draw a box around the lat/long of the fire and reproject to EPSG 5070
+        accum_subset = accumulator[..., row_min:row_max, col_min:col_max]
+        try:
+            accum_subset = accum_subset.rio.reproject('EPSG:5070', nodata=0.)
+        except NoDataInBounds:
+            print('No data in bounds')
+            continue
 
         # Get the new EPSG 5070 bounds of the data
         bounds = accum_subset.rio.bounds()
@@ -176,7 +165,7 @@ for year in years:
             accum_today.values.squeeze()[tuple(accum_today > 0)] = 1
             accum_tomorrow = accum_subset.where(accum_subset.values.squeeze() <= jday + 1, 0)
             accum_tomorrow.values.squeeze()[tuple(accum_tomorrow > 0)] = 1
-            accum_tomorrow.values.squeeze()[tuple(accum_subset == jday+1)] = 2
+            accum_tomorrow.values.squeeze()[tuple(accum_subset == jday + 1)] = 2
 
             # Match the accumulated subset to the DEM
             accum_today = accum_today.rio.reproject_match(dem_subset)
@@ -187,4 +176,7 @@ for year in years:
                 [accum_today, dem_subset, sb40_match, fwi_match, u_match, v_match, gust_match, accum_tomorrow],
                 dim='band')
             fname = f'{year}-{fid}-{month}-{jday}.tif'
-            all_together.rio.to_raster(os.path.join(store_path, 'dataset', fname), dtype=np.float32)
+            if not os.path.isdir(os.path.join(store_path, out_folder)):
+                os.mkdir(os.path.join(store_path, out_folder))
+
+            all_together.rio.to_raster(os.path.join(store_path, out_folder, fname), dtype=np.float32)

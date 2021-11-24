@@ -1,5 +1,7 @@
+import os
 import datetime
 import numpy as np
+import rioxarray as rioxr
 
 
 def build_filename(year, month):
@@ -98,14 +100,155 @@ def prune_ts(l):
     i = mv_ind
     while v != 0 and i != -1:
         v = l[i]
-        nl.insert(0,v)
-        i-=1
-    min_ind=i
+        nl.insert(0, v)
+        i -= 1
+    min_ind = i
     v = -1
-    i = mv_ind+1
+    i = mv_ind + 1
     while v != 0 and i != len(l):
         v = l[i]
         nl.append(v)
-        i+=1
+        i += 1
     max_ind = i
-    return nl,range(min_ind,max_ind-1)
+    return nl, range(min_ind + 1, max_ind)
+
+
+def get_max_shape(accumulator, label_array, prune_data_flag, res, n):
+    max_shape = [0, 0]
+
+    # Loop over all fires in the year
+    for fid in range(2, label_array.max()):
+
+        days = get_fire_days(accumulator, label_array, fid, prune_data_flag)
+        if not days:
+            continue
+        else:
+            start, stop = days
+
+        vals = find_fire_size(start, stop, accumulator, label_array, fid)
+        row_min, row_max, col_min, col_max, lat_min, lat_max, lon_min, lon_max = vals
+
+        accum_subset = accumulator[0, row_min - n:row_max + n, col_min - n:col_max + n]
+        shape = accum_subset.values.squeeze().shape
+        max_shape[0] = shape[0] if shape[0] > max_shape[0] else max_shape[0]
+        max_shape[1] = shape[1] if shape[1] > max_shape[1] else max_shape[1]
+
+    return max_shape
+
+
+def get_max_bounds(accumulator, label_array, prune_data_flag, res, n):
+    max_bounds = [0., 0., 0., 0.]
+
+    # Loop over all fires in the year
+    for fid in range(2, label_array.max()):
+
+        days = get_fire_days(accumulator, label_array, fid, prune_data_flag)
+        if not days:
+            continue
+        else:
+            start, stop = days
+
+        vals = find_fire_size(start, stop, accumulator, label_array, fid)
+        row_min, row_max, col_min, col_max, lat_min, lat_max, lon_min, lon_max = vals
+
+        accum_subset = accumulator.rio.clip_box(minx=lon_min - n * res, miny=lat_min - n * res, maxx=lon_max + n * res,
+                                                maxy=lat_max + n * res, auto_expand=True)
+        accum_subset = accum_subset.rio.reproject('EPSG:5070', nodata=0.)
+        bounds = accum_subset.rio.bounds()
+
+        max_bounds[0] = bounds[0] if bounds[0] > max_bounds[0] else max_bounds[0]
+        max_bounds[1] = bounds[1] if bounds[1] > max_bounds[1] else max_bounds[1]
+        max_bounds[2] = bounds[2] if bounds[2] > max_bounds[2] else max_bounds[2]
+        max_bounds[3] = bounds[3] if bounds[3] > max_bounds[3] else max_bounds[3]
+
+    return max_bounds
+
+
+def find_fire_size(start, stop, accumulator, label_array, fid):
+    row_min, row_max = int(1e8), -1
+    col_min, col_max = int(1e8), -1
+    lat_min, lat_max = int(1e8), -1
+    lon_min, lon_max = int(1e8), -1000
+    for d in range(start, stop + 1):
+
+        # Process the first day of the fire data:
+        if d == start:
+            condition = np.logical_and(accumulator == d, label_array == fid)
+            row, col = np.where(condition.values.squeeze())
+            latitude = accumulator.y.values[row]
+            longitude = accumulator.x.values[col]
+
+        else:
+            row_slice = slice(min(row_min - 500, 0), max(row_max + 500, accumulator.shape[0]))
+            col_slice = slice(min(col_min - 500, 0), max(col_max + 500, accumulator.shape[1]))
+            condition = np.logical_and(accumulator[0, row_slice, col_slice] == d,
+                                       label_array[row_slice, col_slice] == fid)
+            row, col = np.where(condition.values.squeeze())
+            latitude = accumulator.y.values[row]
+            longitude = accumulator.x.values[col]
+
+        # Keep track of bounding box around fire
+        if row.size > 0:
+            if row.min() < row_min:
+                row_min = row.min()
+            if row.max() > row_max:
+                row_max = row.max()
+            if col.min() < col_min:
+                col_min = col.min()
+            if col.max() > col_max:
+                col_max = col.max()
+
+            if latitude.min() < lat_min:
+                lat_min = latitude.min()
+            if latitude.max() > lat_max:
+                lat_max = latitude.max()
+            if longitude.min() < lon_min:
+                lon_min = longitude.min()
+            if longitude.max() > lon_max:
+                lon_max = longitude.max()
+
+    return row_min, row_max, col_min, col_max, lat_min, lat_max, lon_min, lon_max
+
+
+def get_fire_days(accumulator, label_array, fid, prune_data_flag):
+    days = accumulator.values.squeeze()[label_array == fid]
+    start = int(days.min())
+    stop = int(days.max())
+    pixels_burned_time_series = [days[days == i].size for i in range(start, stop + 1)]
+    pruned_ts, ts_ind = prune_ts(pixels_burned_time_series)
+    num_days_in_ts = len(pruned_ts)
+
+    # Let's get rid of the tiny fires
+    if num_days_in_ts < 5:
+        return None
+
+    if prune_data_flag:
+        old_start = start
+        old_stop = stop
+        stop = min(old_stop, start + ts_ind[-1] + 1)
+        start += ts_ind[0]
+
+    return start, stop
+
+
+def accumulate_year(year, start_month, end_month, in_dir):
+    print(f'Accumulating year: {year}')
+
+    # Load in the first raster for the selected year
+    print(f'Accumulating month {start_month}')
+    filename, jd = build_filename(year, start_month)
+    dxr = rioxr.open_rasterio(os.path.join(in_dir, filename))
+    accumulator = dxr.where(dxr > 0, 0., drop=False)
+
+    for month in range(start_month + 1, end_month):
+        print(f'Accumulating month {month}')
+
+        # Load in the month's raster
+        filename, jd = build_filename(year, month)
+        path = os.path.join(in_dir, filename)
+        temp_raster = rioxr.open_rasterio(path)
+
+        # merge the temp raster with the accumulator
+        accumulator = temp_raster.where(temp_raster > 0, accumulator, drop=False)
+
+    return accumulator
