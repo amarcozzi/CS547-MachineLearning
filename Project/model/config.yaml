@@ -1,0 +1,7 @@
+config:
+  version: 1
+
+  # Model configurations
+  in_chan: 7
+  n_classes=3
+  depth=
