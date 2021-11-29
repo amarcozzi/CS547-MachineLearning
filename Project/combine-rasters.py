@@ -13,7 +13,7 @@ from rioxarray.merge import merge_arrays
 sys.setrecursionlimit(10000)
 prune_data_flag = True
 data_path = '/media/anthony/Storage_1/aviation_data'
-out_folder = 'dataset-binary'
+out_folder = 'dataset-big'
 
 # Load in the dem
 dem_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC16_Elev_200.tif'))
@@ -21,14 +21,12 @@ dem_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC16_Elev_200.tif'))
 # Load in sb40
 sb40_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC20_F40_200.tif'))
 
-years = range(2001, 2020)
+start_year = 2011
+end_year = 2020
 start_month = 5
 end_month = 11
 
-for year in years:
-
-    if year != 2019:
-        continue
+for year in range(start_year, end_year+1):
 
     accumulator = accumulator_loader(year, start_month, end_month, data_path)
     res = accumulator.rio.resolution()[0]
@@ -37,14 +35,7 @@ for year in years:
     print(f'Labeling fires in year {year}')
     label_array = label_array_func(accumulator.values.squeeze())
 
-    print('Finding maximum raster shape')
-    # if year == 2019:
-    #     max_shape = [57, 101]
-    # else:
-    # max_shape, max_bounds = get_pad_span_and_shape(dem_raster, accumulator, label_array, prune_data_flag, res, 4)
-    # bound_span = get_bounds_span(g)
-    max_shape = [100, 100]
-    # max_window = [750, 750]
+    max_shape = [128, 128]
 
     # Loop over all fires in the year
     max_fid = label_array.max()
@@ -73,12 +64,12 @@ for year in years:
         vals = round_idx_to_max(row_min, row_max, col_min, col_max, max_shape, fid)
         row_min, row_max, col_min, col_max = vals
 
-        # Draw a box around the lat/long of the fire and reproject to EPSG 5070
+        # Draw a box around the lat/long of the fire
         # n = 4
         # accum_subset = accumulator.rio.clip_box(minx=lon_min - n * res, miny=lat_min - n * res, maxx=lon_max + n * res,
         #                                         maxy=lat_max + n * res, auto_expand=True)
 
-        # Draw a box around the lat/long of the fire and reproject to EPSG 5070
+        # Draw a box around the lat/long of the fire
         accum_subset = accumulator[..., row_min:row_max, col_min:col_max]
         if accum_subset.shape != (1, *max_shape):
             print('raster is the wrong shape')
@@ -111,11 +102,8 @@ for year in years:
             continue
 
         print("Processing fire %i of %i." % (fid, label_array.max()))
-        # Match all of the rasters to the DEM
-        # sb40_match = sb40_subset.rio.reproject_match(dem_subset)
-
         # Get wind and FWI data for each day
-        for i in range(stop - start):
+        for i in tqdm(range(stop - start)):
             jday = i + start
             # Convert the julian day to a year-month-day format
             julian_day = f'{str(year)[-2:]}{jday}'
@@ -142,6 +130,8 @@ for year in years:
             # gust_match = gust_raster.rio.reproject_match(dem_subset, resampling=3)
             # u_match = u_raster.rio.reproject_match(dem_subset, resampling=3)
             # v_match = v_raster.rio.reproject_match(dem_subset, resampling=3)
+
+            # Match the daily rasters to the accumualted subset
             fwi_match = fwi_raster.rio.reproject_match(accum_subset, resampling=3)
             gust_match = gust_raster.rio.reproject_match(accum_subset, resampling=3)
             u_match = u_raster.rio.reproject_match(accum_subset, resampling=3)
@@ -149,12 +139,14 @@ for year in years:
 
             # Assign all of the pixels already burned to 0
             accum_today = accum_subset.where(accum_subset.values.squeeze() <= jday, 0)
+
+            # Assign labels of 1 and 2 for previously and newly burnt pixels
             accum_today.values.squeeze()[tuple(accum_today > 0)] = 1
             accum_tomorrow = accum_subset.where(accum_subset.values.squeeze() <= jday + 1, 0)
             accum_tomorrow.values.squeeze()[tuple(accum_tomorrow > 0)] = 1
-            # accum_tomorrow.values.squeeze()[tuple(accum_subset == jday + 1)] = 2
+            accum_tomorrow.values.squeeze()[tuple(accum_subset == jday + 1)] = 2
 
-            # Match the accumulated subset to the DEM
+            # Match the accumulated subset to the accumulated subset
             accum_today = accum_today.rio.reproject_match(accum_subset)
             accum_tomorrow = accum_tomorrow.rio.reproject_match(accum_subset)
 
