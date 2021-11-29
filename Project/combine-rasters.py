@@ -22,6 +22,7 @@ dem_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC16_Elev_200.tif'))
 # Load in sb40
 sb40_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC20_F40_200.tif'))
 
+max_shape = [64, 64]
 start_year = 2011
 end_year = 2020
 start_month = 5
@@ -38,8 +39,6 @@ for year in range(start_year, end_year+1):
     print(f'Labeling fires in year {year}')
     label_array = label_array_func(accumulator.values.squeeze())
 
-    max_shape = [128, 128]
-
     # Loop over all fires in the year
     max_fid = label_array.max()
     for fid in range(2, max_fid):
@@ -51,9 +50,14 @@ for year in range(start_year, end_year+1):
         num_days_in_ts = len(pruned_ts)
 
         # Let's get rid of the tiny fires
-        if num_days_in_ts < 5:
-            print(f'Fire too small - {fid} of {max_fid}')
+        if num_days_in_ts < 3:
             continue
+
+        if prune_data_flag:
+            old_start = start
+            old_stop = stop
+            stop = min(old_stop, start + ts_ind[-1] + 1)
+            start += ts_ind[0]
 
         vals = find_fire_size(start, stop, accumulator, label_array, fid)
         row_min, row_max, col_min, col_max, lat_min, lat_max, lon_min, lon_max = vals
@@ -170,7 +174,8 @@ for year in range(start_year, end_year+1):
             all_together.rio.to_raster(os.path.join(data_path, out_folder, fname), dtype=np.float32)
             num_days += 1
 
-data = {'num-fires': num_fires,
+data = {'shape': max_shape,
+        'num-fires': num_fires,
         'num-days': num_days,
         'mean-days-per-fire': num_days/num_fires}
 with open(os.path.join(data_path, out_folder, 'metadata.txt')) as fout:
