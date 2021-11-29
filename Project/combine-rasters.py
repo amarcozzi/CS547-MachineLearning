@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import datetime
 import numpy as np
 import rasterio as rio
@@ -26,6 +27,8 @@ end_year = 2020
 start_month = 5
 end_month = 11
 
+num_fires = 0
+num_days = 0
 for year in range(start_year, end_year+1):
 
     accumulator = accumulator_loader(year, start_month, end_month, data_path)
@@ -39,7 +42,7 @@ for year in range(start_year, end_year+1):
 
     # Loop over all fires in the year
     max_fid = label_array.max()
-    for fid in tqdm(range(2, max_fid)):
+    for fid in range(2, max_fid):
         days = accumulator.values.squeeze()[label_array == fid]
         start = int(days.min())
         stop = int(days.max())
@@ -49,6 +52,7 @@ for year in range(start_year, end_year+1):
 
         # Let's get rid of the tiny fires
         if num_days_in_ts < 5:
+            print(f'Fire too small - {fid} of {max_fid}')
             continue
 
         vals = find_fire_size(start, stop, accumulator, label_array, fid)
@@ -58,7 +62,7 @@ for year in range(start_year, end_year+1):
         accum_test = accumulator[..., row_min:row_max, col_min:col_max]
         test_shape = accum_test.values.shape[-2:]
         if np.any(np.array(test_shape) > np.array(max_shape)):
-            print('Fire too big')
+            print('Fire too big - {fid} of {max_fid}')
             continue
 
         vals = round_idx_to_max(row_min, row_max, col_min, col_max, max_shape, fid)
@@ -72,7 +76,7 @@ for year in range(start_year, end_year+1):
         # Draw a box around the lat/long of the fire
         accum_subset = accumulator[..., row_min:row_max, col_min:col_max]
         if accum_subset.shape != (1, *max_shape):
-            print('raster is the wrong shape')
+            print(f'raster is the wrong shape - {fid} of {max_fid}')
             continue
         bounds = accum_subset.rio.bounds()
 
@@ -81,27 +85,28 @@ for year in range(start_year, end_year+1):
             dem_subset = dem_raster.rio.clip_box(*bounds)
             dem_subset = dem_subset.rio.reproject_match(accum_subset, resampling=3)
         except NoDataInBounds:
-            print('No data in bounds - DEM')
+            print(f'No data in bounds - DEM - {fid} of {max_fid}')
             continue
         try:
             sb40_subset = sb40_raster.rio.clip_box(*bounds)
             sb40_subset = sb40_subset.rio.reproject_match(accum_subset)
         except NoDataInBounds:
-            print('No data in bounds - SB40')
+            print(f'No data in bounds - SB40 - {fid} of {max_fid}')
             continue
 
         # Skip over entries outside the U.S.
         invalid_DEM_flag = dem_subset.max() == -9999 or dem_subset.min() == -9999
         if invalid_DEM_flag:
-            print('no-data values present in DEM')
+            print(f'no-data values present in DEM - {fid} of {max_fid}')
             continue
 
         invalid_SB40_flag = sb40_subset.max() == -9999 or sb40_subset.min() == -9999
         if invalid_SB40_flag:
-            print('no-data values present in SB40')
+            print(f'no-data values present in SB40 - {fid} of {max_fid}')
             continue
 
-        print("Processing fire %i of %i." % (fid, label_array.max()))
+        print("Processing fire %i of %i." % (fid, max_fid))
+        num_fires += 1
         # Get wind and FWI data for each day
         for i in tqdm(range(stop - start)):
             jday = i + start
@@ -163,3 +168,10 @@ for year in range(start_year, end_year+1):
                 os.mkdir(os.path.join(data_path, out_folder))
 
             all_together.rio.to_raster(os.path.join(data_path, out_folder, fname), dtype=np.float32)
+            num_days += 1
+
+data = {'num-fires': num_fires,
+        'num-days': num_days,
+        'mean-days-per-fire': num_days/num_fires}
+with open(os.path.join(data_path, out_folder, 'metadata.txt')) as fout:
+    json.dump(data, fout)
