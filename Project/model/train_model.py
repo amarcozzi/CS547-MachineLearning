@@ -156,4 +156,5 @@ if __name__ == '__main__':
     main(DATA_PATH)
     end_time = time.time()
     print(f'\n***************************************\nTook {end_time-start_time:.2f} seconds to train')
-    np.save('time.txt', np.array(end_time-start_time))
+    with open('time.txt', 'w') as fout:
+        fout.write(str(end_time - start_time))
