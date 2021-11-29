@@ -37,7 +37,8 @@ for year in range(start_year, end_year+1):
 
     # Label accumulated fires
     print(f'Labeling fires in year {year}')
-    label_array = label_array_func(accumulator.values.squeeze())
+    label_array = label_loader(accumulator.values.squeeze(), year, data_path)
+
 
     # Loop over all fires in the year
     max_fid = label_array.max()
@@ -53,20 +54,20 @@ for year in range(start_year, end_year+1):
         if num_days_in_ts < 3:
             continue
 
+        vals = find_fire_size(start, stop, accumulator, label_array, fid)
+        row_min, row_max, col_min, col_max, lat_min, lat_max, lon_min, lon_max = vals
+
         if prune_data_flag:
             old_start = start
             old_stop = stop
             stop = min(old_stop, start + ts_ind[-1] + 1)
             start += ts_ind[0]
 
-        vals = find_fire_size(start, stop, accumulator, label_array, fid)
-        row_min, row_max, col_min, col_max, lat_min, lat_max, lon_min, lon_max = vals
-
         # Match the shape of the subset to the maximum extracted shape
         accum_test = accumulator[..., row_min:row_max, col_min:col_max]
         test_shape = accum_test.values.shape[-2:]
         if np.any(np.array(test_shape) > np.array(max_shape)):
-            print('Fire too big - {fid} of {max_fid}')
+            print(f'Fire too big - {fid} of {max_fid}')
             continue
 
         vals = round_idx_to_max(row_min, row_max, col_min, col_max, max_shape, fid)

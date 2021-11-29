@@ -266,6 +266,19 @@ def accumulator_loader(year, start_month, end_month, data_path):
         accumulator.rio.to_raster(fpath)
         return accumulator
 
+def label_loader(data, year, path):
+    label_path = os.path.join(path, 'labeled_fires')
+    label_name = f'{year}-labeled-fires.npy'
+
+    # Load in the accumulated fires if the file has already been created
+    fpath = os.path.join(label_path, label_name)
+    if os.path.exists(fpath):
+        return np.load(fpath)
+    
+    label_array = label_array_func(data)
+    np.save(fpath, label_array)
+    return label_array
+
 
 def round_idx_to_max(row_min, row_max, col_min, col_max, max_shape, fid):
     # Modify the max/min rows and columns to match the default size
