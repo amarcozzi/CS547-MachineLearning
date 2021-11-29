@@ -61,7 +61,7 @@ def main(dpath):
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-2)
 
-    epochs = 250
+    epochs = 5000
 
     results = np.zeros([4, epochs])
     total_train = 0
