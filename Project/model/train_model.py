@@ -5,6 +5,7 @@ from tqdm import tqdm
 from torch import optim
 from torch.utils.data import TensorDataset
 from sklearn.model_selection import train_test_split
+import time
 
 from unet import *
 from data_loading import *
@@ -38,11 +39,11 @@ def prep_data(dpath) -> tuple:
     test_data = TensorDataset(X_test, y_test)
 
     # Use the datasets to create train and test loader objects
-    batch_size = 25
+    batch_size = 50
     train_loader = torch.utils.data.DataLoader(dataset=training_data,
                                                batch_size=batch_size,
                                                shuffle=True)
-    batch_size = 25
+    batch_size = 50
     test_loader = torch.utils.data.DataLoader(dataset=test_data,
                                               batch_size=batch_size,
                                               shuffle=False)
@@ -63,7 +64,7 @@ def main(dpath):
 
     epochs = 5000
 
-    results = np.zeros([4, epochs])
+    results = np.zeros([5, epochs])
     total_train = 0
     correct_train = 0
     # Loop over the data
@@ -99,6 +100,7 @@ def main(dpath):
 
         model.eval()
         # After each epoch, compute the test set accuracy
+        loss_tracker = 0
         total = 0.
         correct = 0.
         # Loop over all the test examples and accumulate the number of correct results in each batch
@@ -126,6 +128,8 @@ def main(dpath):
             total_none += torch.sum(t == 0)
             total_old += torch.sum(t == 1)
             total_new += torch.sum(t == 2)
+            loss = criterion(outputs, t)
+            loss_tracker += loss.item()
         ratio_correct_none = float(correct_none / total_none)
         ratio_correct_old = float(correct_old / total_old)
         ratio_correct_new = float(correct_new / total_new)
@@ -134,8 +138,10 @@ def main(dpath):
         results[1, epoch] = ratio_correct_old
         results[2, epoch] = ratio_correct_old
         results[3, epoch] = result
-        print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100}%, 1: {ratio_correct_old*100}%, 2: {ratio_correct_new*100}%')
+        results[3, epoch] = loss_tracker
+        print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
         print(f'TOTAL TEST ACCURACY {result*100}%')
+        print(f'Cross-Entropy Loss: {loss_tracker}')
 
         # Print the epoch, the training loss, and the test set accuracy.
         # print(epoch, loss.item(), 100. * correct_train / total_train, 100. * correct / total)
@@ -144,6 +150,10 @@ def main(dpath):
     torch.save(model.state_dict(), 'model.nn')
 
 if __name__ == '__main__':
+    start_time = time.time()
     if len(sys.argv) > 1:
         DATA_PATH = sys.argv[1]
     main(DATA_PATH)
+    end_time = time.time()
+    print(f'\n***************************************\nTook {end_time-start_time:.2f} seconds to train')
+    np.save('time.txt', np.array(end_time-start_time))
