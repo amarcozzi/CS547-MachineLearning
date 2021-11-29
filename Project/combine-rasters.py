@@ -160,6 +160,12 @@ for year in range(start_year, end_year+1):
             accum_today = accum_today.rio.reproject_match(accum_subset)
             accum_tomorrow = accum_tomorrow.rio.reproject_match(accum_subset)
 
+            if accum_today.values.min() != 0:
+                print('Error - no min values')
+
+            if accum_tomorrow.values.min() != 0:
+                print('Error - no min values')
+
             raster_list = [accum_today, dem_subset, sb40_subset, fwi_match, u_match, v_match, gust_match,
                            accum_tomorrow]
             if not all(raster.shape == (1, *max_shape) for raster in raster_list):
