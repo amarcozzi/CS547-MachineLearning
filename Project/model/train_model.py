@@ -55,9 +55,9 @@ def main(dpath):
     model.to(DEVICE)
 
     # criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
-    # criterion = torch.nn.CrossEntropyLoss()
-    pos_weight = torch.from_numpy(np.array([1e-2, 1e-1, 1])).to(torch.float).to(DEVICE)
-    criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
+    criterion = torch.nn.CrossEntropyLoss()
+    # pos_weight = torch.from_numpy(np.array([1e-2, 1e-1, 1])).to(torch.float).to(DEVICE)
+    # criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4, weight_decay=1.0e-3)
 
@@ -102,9 +102,9 @@ def main(dpath):
         total = 0.
         correct = 0.
         # Loop over all the test examples and accumulate the number of correct results in each batch
-        guess_none = 0
-        guess_old = 0
-        guess_new = 0
+        correct_none = 0
+        correct_old = 0
+        correct_new = 0
         total_none = 0
         total_old = 0
         total_new = 0
@@ -117,15 +117,18 @@ def main(dpath):
             predicted = torch.argmax(outputs, 1)
             correct += torch.sum(t == predicted)
             total += torch.numel(t)
-            guess_none += int((predicted == 0).sum())
-            guess_old += int((predicted == 1).sum())
-            guess_new += int((predicted == 2).sum())
-            total_none += int((t == 0).sum())
-            total_old += int((t == 1).sum())
-            total_new += int((t == 2).sum())
-        ratio_correct_none = guess_none / total_none
-        ratio_correct_old = guess_old / total_old
-        ratio_correct_new = guess_new / total_new
+            # guess_none += int((predicted == 0).sum())
+            # guess_old += int((predicted == 1).sum())
+            # guess_new += int((predicted == 2).sum())
+            correct_none += torch.sum((predicted == t) * (predicted == 0))
+            correct_old += torch.sum((predicted == t) * (predicted == 1))
+            correct_new += torch.sum((predicted == t) * (predicted == 2))
+            total_none += torch.sum(t == 0)
+            total_old += torch.sum(t == 1)
+            total_new += torch.sum(t == 2)
+        ratio_correct_none = float(correct_none / total_none)
+        ratio_correct_old = float(correct_old / total_old)
+        ratio_correct_new = float(correct_new / total_new)
         result = float(correct / total)
         results[0, epoch] = ratio_correct_none
         results[1, epoch] = ratio_correct_old
