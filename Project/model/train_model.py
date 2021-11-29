@@ -56,7 +56,7 @@ def main(dpath):
 
     # criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
     # criterion = torch.nn.CrossEntropyLoss()
-    pos_weight = torch.from_numpy(np.array([1e-1, 0.5, 1])).to(torch.float).to(DEVICE)
+    pos_weight = torch.from_numpy(np.array([1e-2, 1e-2, 1])).to(torch.float).to(DEVICE)
     criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-2)
