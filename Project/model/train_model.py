@@ -1,5 +1,5 @@
 import os
-
+import sys
 import numpy as np
 from tqdm import tqdm
 from torch import optim
@@ -13,9 +13,9 @@ DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 
 
-def prep_data() -> tuple:
+def prep_data(dpath) -> tuple:
     # Load all of the raster data into memory using np arrays
-    RDL = RasterDataLoader(DATA_PATH, in_bands=7)
+    RDL = RasterDataLoader(dpath, in_bands=7)
     X, y = RDL.get_test_training_loaders()
 
     # split the data into test and training data
@@ -49,14 +49,14 @@ def prep_data() -> tuple:
     return train_loader, test_loader
 
 
-def main():
-    train_loader, test_loader = prep_data()
+def main(dpath):
+    train_loader, test_loader = prep_data(dpath)
     model = UNet(in_chan=7, n_classes=3, depth=3)
     model.to(DEVICE)
 
     # criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
     # criterion = torch.nn.CrossEntropyLoss()
-    pos_weight = torch.from_numpy(np.array([1e-2, 1e-1, 1])).to(torch.float).to(DEVICE)
+    pos_weight = torch.from_numpy(np.array([1e-1, 0.5, 1])).to(torch.float).to(DEVICE)
     criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-2)
@@ -141,4 +141,6 @@ def main():
     torch.save(model.state_dict(), 'model.nn')
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) > 1:
+        DATA_PATH = sys.argv[1]
+    main(DATA_PATH)
