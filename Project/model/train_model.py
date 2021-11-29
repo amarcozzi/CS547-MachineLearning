@@ -1,4 +1,6 @@
 import os
+
+import numpy as np
 from tqdm import tqdm
 from torch import optim
 from torch.utils.data import TensorDataset
@@ -36,11 +38,11 @@ def prep_data() -> tuple:
     test_data = TensorDataset(X_test, y_test)
 
     # Use the datasets to create train and test loader objects
-    batch_size = 10
+    batch_size = 25
     train_loader = torch.utils.data.DataLoader(dataset=training_data,
                                                batch_size=batch_size,
                                                shuffle=True)
-    batch_size = 10
+    batch_size = 25
     test_loader = torch.utils.data.DataLoader(dataset=test_data,
                                               batch_size=batch_size,
                                               shuffle=False)
@@ -54,20 +56,22 @@ def main():
 
     # criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
     # criterion = torch.nn.CrossEntropyLoss()
-    # pos_weight = torch.from_numpy(np.array([0.001, 1, 1])).to(torch.float).to(DEVICE)
-    # criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
+    pos_weight = torch.from_numpy(np.array([1e-2, 1e-1, 1])).to(torch.float).to(DEVICE)
+    criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-2)
 
-    epochs = 200
+    epochs = 250
 
+    results = np.zeros([4, epochs])
     total_train = 0
     correct_train = 0
     # Loop over the data
     for epoch in range(epochs):
         print(f'\nEPOCH {epoch+1}\n*******************************')
-        # model.to(DEVICE)
+
         model.train()
+
         # Loop over each subset of data
         print('Training Step')
         for d, t in train_loader:
@@ -79,11 +83,6 @@ def main():
 
             # Make a prediction based on the model
             outputs = model(d)
-
-            if epoch % 5 == 0:
-                criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
-            else:
-                criterion = torch.nn.CrossEntropyLoss()
 
             # Compute the loss
             loss = criterion(outputs, t)
@@ -103,9 +102,9 @@ def main():
         total = 0.
         correct = 0.
         # Loop over all the test examples and accumulate the number of correct results in each batch
-        correct_none = 0
-        correct_old = 0
-        correct_new = 0
+        guess_none = 0
+        guess_old = 0
+        guess_new = 0
         total_none = 0
         total_old = 0
         total_new = 0
@@ -116,23 +115,29 @@ def main():
             t = t.to(DEVICE, dtype=torch.long)
             outputs = model(d)
             predicted = torch.argmax(outputs, 1)
-            # predicted = torch.softmax(outputs, dim=1)
             correct += torch.sum(t == predicted)
             total += torch.numel(t)
-            correct_none += int(((t == 0) == (predicted == 0)).sum())
-            correct_old += int(((t == 1) == (predicted == 1)).sum())
-            correct_new += int(((t == 2) == (predicted == 2)).sum())
+            guess_none += int((predicted == 0).sum())
+            guess_old += int((predicted == 1).sum())
+            guess_new += int((predicted == 2).sum())
             total_none += int((t == 0).sum())
             total_old += int((t == 1).sum())
             total_new += int((t == 2).sum())
-        ratio_correct_none = correct_none / total_none
-        ratio_correct_old = correct_old / total_old
-        ratio_correct_new = correct_new / total_new
-        print(f'\nTEST: 0: {ratio_correct_none}, 1: {ratio_correct_old}, 2: {ratio_correct_new}')
-        print(f'TOTAL TEST {float(correct / total)}')
+        ratio_correct_none = guess_none / total_none
+        ratio_correct_old = guess_old / total_old
+        ratio_correct_new = guess_new / total_new
+        result = float(correct / total)
+        results[0, epoch] = ratio_correct_none
+        results[1, epoch] = ratio_correct_old
+        results[2, epoch] = ratio_correct_old
+        results[3, epoch] = result
+        print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100}%, 1: {ratio_correct_old*100}%, 2: {ratio_correct_new*100}%')
+        print(f'TOTAL TEST ACCURACY {result*100}%')
 
         # Print the epoch, the training loss, and the test set accuracy.
         # print(epoch, loss.item(), 100. * correct_train / total_train, 100. * correct / total)
+
+    np.save('results.npy', results)
     torch.save(model.state_dict(), 'model.nn')
 
 if __name__ == '__main__':

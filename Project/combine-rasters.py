@@ -13,7 +13,7 @@ from rioxarray.merge import merge_arrays
 sys.setrecursionlimit(10000)
 prune_data_flag = True
 data_path = '/media/anthony/Storage_1/aviation_data'
-out_folder = 'dataset'
+out_folder = 'dataset-binary'
 
 # Load in the dem
 dem_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC16_Elev_200.tif'))
@@ -152,7 +152,7 @@ for year in years:
             accum_today.values.squeeze()[tuple(accum_today > 0)] = 1
             accum_tomorrow = accum_subset.where(accum_subset.values.squeeze() <= jday + 1, 0)
             accum_tomorrow.values.squeeze()[tuple(accum_tomorrow > 0)] = 1
-            accum_tomorrow.values.squeeze()[tuple(accum_subset == jday + 1)] = 2
+            # accum_tomorrow.values.squeeze()[tuple(accum_subset == jday + 1)] = 2
 
             # Match the accumulated subset to the DEM
             accum_today = accum_today.rio.reproject_match(accum_subset)
