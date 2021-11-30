@@ -1,4 +1,5 @@
 import os
+import gc
 import sys
 import json
 import datetime
@@ -89,7 +90,8 @@ for year in range(start_year, end_year+1):
         #                                         maxy=lat_max + n * res, auto_expand=True)
 
         # Draw a box around the lat/long of the fire
-        accum_subset = accumulator.where(label_array == fid, 0)[..., row_min:row_max, col_min:col_max]
+        # accum_subset = accumulator.where(label_array == fid, 0)[..., row_min:row_max, col_min:col_max]
+        accum_subset = accumulator[..., row_min:row_max, col_min:col_max]
         if accum_subset.shape != (1, *max_shape):
             print(f'raster is the wrong shape - {fid} of {max_fid}')
             continue
@@ -119,6 +121,11 @@ for year in range(start_year, end_year+1):
         if invalid_SB40_flag:
             print(f'no-data values present in SB40 - {fid} of {max_fid}')
             continue
+
+        accumulator_fid = accumulator.where(label_array == fid, 0)
+        accum_subset = accumulator_fid[..., row_min:row_max, col_min:col_max]
+        del accumulator_fid
+        gc.collect()
 
         print("Processing fire %i of %i." % (fid, max_fid))
         num_fires += 1
