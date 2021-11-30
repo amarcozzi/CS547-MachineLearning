@@ -16,7 +16,7 @@ EPOCHS = 10
 EPOCH_STEPS = 1
 TRAIN_BATCH_SIZE=20
 TEST_BATCH_SIZE=20
-LABEL_WEIGHTS=[1, 1, 1]
+LABEL_WEIGHTS=[1e-4, 1e-2, 1]
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 RESULTS = {
@@ -211,8 +211,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
 
             print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.2f}%, 1: {ratio_correct_old*100:.2f}%, 2: {ratio_correct_new*100:.2f}%')
             print(f'VALIDATION OVERFITTING: 0: {ratio_guess_none:.2f}, 1: {ratio_guess_old:.2f}, 2: {ratio_guess_new:.2f}')
-            print(f'TOTAL VALIDATION ACCURACY {ratio_correct_total*100}%')
-            print(f'Cross-Entropy Loss: {loss_tracker}')
+            print(f'TOTAL VALIDATION ACCURACY {ratio_correct_total*100:.4f}%')
+            print(f'Cross-Entropy Loss: {loss_tracker:.4f}')
     
     return model
 
@@ -286,7 +286,7 @@ def test_model(test_loader, model) -> tuple:
     print('\n***********************************************************')
     print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100:.2f}%, 1: {ratio_correct_old*100:.2f}%, 2: {ratio_correct_new*100:.2f}%')
     print(f'\nTEST OVERFITTING: 0: {ratio_guess_none:.2f}, 1: {ratio_guess_old:.2f}, 2: {ratio_guess_new:.2f}')
-    print(f'TOTAL TEST ACCURACY {ratio_correct_total*100}%')
+    print(f'TOTAL TEST ACCURACY {ratio_correct_total*100:.4f}%')
 
 
 def main(dpath) -> None:
