@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import numpy as np
 from tqdm import tqdm
 from torch import optim
@@ -12,7 +13,23 @@ from data_loading import *
 
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
-
+RESULTS = {
+    'val_correct_0': [],
+    'val_correct_1': [],
+    'val_correct_2': [],
+    'val_correct_total': [],
+    'val_cross_entropy_loss': [],
+    'train_correct_0': [],
+    'train_correct_1': [],
+    'train_correct_2': [],
+    'train_correct_total': [],
+    'train_cross_entropy_loss': [],
+    'test_correct_0': [],
+    'test_correct_1': [],
+    'test_correct_2': [],
+    'test_correct_total': [],
+    'train_time': 0.
+}
 
 def prep_data(dpath) -> tuple:
     # Load all of the raster data into memory using np arrays
@@ -64,7 +81,6 @@ def main(dpath):
 
     epochs = 5000
 
-    results = np.zeros([5, epochs])
     total_train = 0
     correct_train = 0
     # Loop over the data
@@ -117,36 +133,36 @@ def main(dpath):
             t = t.to(DEVICE, dtype=torch.long)
             outputs = model(d)
             predicted = torch.argmax(outputs, 1)
+
             correct += torch.sum(t == predicted)
             total += torch.numel(t)
-            # guess_none += int((predicted == 0).sum())
-            # guess_old += int((predicted == 1).sum())
-            # guess_new += int((predicted == 2).sum())
+ 
             correct_none += torch.sum((predicted == t) * (predicted == 0))
             correct_old += torch.sum((predicted == t) * (predicted == 1))
             correct_new += torch.sum((predicted == t) * (predicted == 2))
             total_none += torch.sum(t == 0)
             total_old += torch.sum(t == 1)
             total_new += torch.sum(t == 2)
+
             loss = criterion(outputs, t)
             loss_tracker += loss.item()
+            
         ratio_correct_none = float(correct_none / total_none)
         ratio_correct_old = float(correct_old / total_old)
         ratio_correct_new = float(correct_new / total_new)
-        result = float(correct / total)
-        results[0, epoch] = ratio_correct_none
-        results[1, epoch] = ratio_correct_old
-        results[2, epoch] = ratio_correct_old
-        results[3, epoch] = result
-        results[3, epoch] = loss_tracker
+        ratio_correct_total = float(correct / total)
+
+        RESULTS['val_correct_0'].append(ratio_correct_none)
+        RESULTS['val_correct_1'].append(ratio_correct_old)
+        RESULTS['val_correct_2'].append(ratio_correct_new)
+        RESULTS['val_correct_total'].append(ratio_correct_total)
+        RESULTS['val_cross_entropy_loss'].append(loss_tracker)
+
         print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
-        print(f'TOTAL TEST ACCURACY {result*100}%')
+        print(f'TOTAL TEST ACCURACY {ratio_correct_total*100}%')
         print(f'Cross-Entropy Loss: {loss_tracker}')
 
-        # Print the epoch, the training loss, and the test set accuracy.
-        # print(epoch, loss.item(), 100. * correct_train / total_train, 100. * correct / total)
-
-    np.save('results.npy', results)
+    # Save the model's state dictionary
     torch.save(model.state_dict(), 'model.nn')
 
 if __name__ == '__main__':
@@ -154,7 +170,8 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         DATA_PATH = sys.argv[1]
     main(DATA_PATH)
-    end_time = time.time()
-    print(f'\n***************************************\nTook {end_time-start_time:.2f} seconds to train')
-    with open('time.txt', 'w') as fout:
-        fout.write(str(end_time - start_time))
+    elapsed_time = time.time() - start_time
+    print(f'\n***************************************\nTook {elapsed_time:.2f} seconds to train')
+    RESULTS['train_time'] = elapsed_time
+    with open('results.json', 'w') as fout:
+        json.dump(RESULTS, fout)
