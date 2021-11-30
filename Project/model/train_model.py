@@ -12,10 +12,11 @@ import time
 from unet import *
 from data_loading import *
 
-EPOCHS = 1000
+EPOCHS = 2500
 EPOCH_STEPS = 1
 TRAIN_BATCH_SIZE=100
 TEST_BATCH_SIZE=50
+LABEL_WEIGHTS=[1e-4, 1e-2, 1]
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 RESULTS = {
@@ -95,7 +96,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
 
     # criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
     # criterion = torch.nn.CrossEntropyLoss()
-    pos_weight = torch.from_numpy(np.array([1e-2, 1e-1, 1])).to(torch.float).to(DEVICE)
+    pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
     criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4, weight_decay=1.0e-3)
@@ -263,8 +264,10 @@ def main(dpath) -> None:
 
     # Assess how well the model did
     accuracy = test_model(test_loader, model)
-    RESULTS['test_correct_0'], RESULTS['test_correct_1'], RESULTS['test_correct_2'], 
-    RESULTS['test_correct_total'] = accuracy
+    RESULTS['test_correct_0'] = accuracy[0]
+    RESULTS['test_correct_1'] = accuracy[1]
+    RESULTS['test_correct_2'] = accuracy[2]
+    RESULTS['test_correct_total'] = accuracy[3]
 
     # End the clock
     elapsed_time = time.time() - start_time
