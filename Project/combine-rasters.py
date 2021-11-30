@@ -12,6 +12,12 @@ from rioxarray.exceptions import NoDataInBounds
 from rioxarray.merge import merge_arrays
 
 sys.setrecursionlimit(10000)
+
+if len(sys.argv) > 1:
+    arg_year = int(sys.argv[1])
+else:
+    arg_year = None
+
 prune_data_flag = True
 data_path = '/media/anthony/Storage_1/aviation_data'
 out_folder = 'dataset-big'
@@ -31,6 +37,10 @@ end_month = 11
 num_fires = 0
 num_days = 0
 for year in range(start_year, end_year+1):
+
+    if arg_year:
+        if year != arg_year:
+            continue
 
     accumulator = accumulator_loader(year, start_month, end_month, data_path)
     res = accumulator.rio.resolution()[0]

@@ -14,8 +14,8 @@ from data_loading import *
 
 EPOCHS = 1000
 EPOCH_STEPS = 1
-TRAIN_BATCH_SIZE=100
-TEST_BATCH_SIZE=50
+TRAIN_BATCH_SIZE=50
+TEST_BATCH_SIZE=100
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 RESULTS = {
@@ -263,8 +263,10 @@ def main(dpath) -> None:
 
     # Assess how well the model did
     accuracy = test_model(test_loader, model)
-    RESULTS['test_correct_0'], RESULTS['test_correct_1'], RESULTS['test_correct_2'], 
-    RESULTS['test_correct_total'] = accuracy
+    RESULTS['test_correct_0'] = accuracy[0]
+    RESULTS['test_correct_1'] = accuracy[1]
+    RESULTS['test_correct_2'] = accuracy[2]
+    RESULTS['test_correct_total'] = accuracy[3]
 
     # End the clock
     elapsed_time = time.time() - start_time
@@ -275,7 +277,7 @@ def main(dpath) -> None:
     torch.save(model.state_dict(), 'model.nn')
 
 if __name__ == '__main__':
-    print('Begining launch sequence...')
+    print('\nBegining launch sequence...')
 
     # Load in a passed data path
     if len(sys.argv) > 1:
