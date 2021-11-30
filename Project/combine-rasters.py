@@ -23,8 +23,8 @@ dem_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC16_Elev_200.tif'))
 sb40_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC20_F40_200.tif'))
 
 max_shape = [64, 64]
-start_year = 2011
-end_year = 2020
+start_year = 2010
+end_year = 2019
 start_month = 5
 end_month = 11
 

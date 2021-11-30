@@ -4,6 +4,7 @@ import json
 import numpy as np
 from tqdm import tqdm
 from torch import optim
+from torch.nn import DataParallel
 from torch.utils.data import TensorDataset
 from sklearn.model_selection import train_test_split
 import time
@@ -11,7 +12,8 @@ import time
 from unet import *
 from data_loading import *
 
-EPOCHS = 50
+EPOCHS = 100
+EPOCH_STEPS = 5
 TRAIN_BATCH_SIZE=50
 TEST_BATCH_SIZE=20
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
@@ -131,53 +133,55 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             # total_train += float(t.size(0))
             # correct_train += float((predicted == t).sum())
 
-        model.eval()
-        # After each epoch, compute the validation set accuracy
-        loss_tracker = 0
-        total = 0.
-        correct = 0.
+        if epoch % EPOCH_STEPS == 0:
 
-        # Loop over all the validation examples and accumulate the number of correct results in each batch
-        correct_none = 0
-        correct_old = 0
-        correct_new = 0
-        total_none = 0
-        total_old = 0
-        total_new = 0
-        print('Computing validation accuracy')
-        for d, t in val_loader:
-            d = d.to(DEVICE, dtype=torch.float32)
-            t = t.to(DEVICE, dtype=torch.long)
-            outputs = model(d)
-            predicted = torch.argmax(outputs, 1)
+            model.eval()
+            # After each epoch, compute the validation set accuracy
+            loss_tracker = 0
+            total = 0.
+            correct = 0.
 
-            correct += torch.sum(t == predicted)
-            total += torch.numel(t)
- 
-            correct_none += torch.sum((predicted == t) * (predicted == 0))
-            correct_old += torch.sum((predicted == t) * (predicted == 1))
-            correct_new += torch.sum((predicted == t) * (predicted == 2))
-            total_none += torch.sum(t == 0)
-            total_old += torch.sum(t == 1)
-            total_new += torch.sum(t == 2)
+            # Loop over all the validation examples and accumulate the number of correct results in each batch
+            correct_none = 0
+            correct_old = 0
+            correct_new = 0
+            total_none = 0
+            total_old = 0
+            total_new = 0
+            print('Computing validation accuracy')
+            for d, t in val_loader:
+                d = d.to(DEVICE, dtype=torch.float32)
+                t = t.to(DEVICE, dtype=torch.long)
+                outputs = model(d)
+                predicted = torch.argmax(outputs, 1)
 
-            loss = criterion(outputs, t)
-            loss_tracker += loss.item()
-            
-        ratio_correct_none = float(correct_none / total_none)
-        ratio_correct_old = float(correct_old / total_old)
-        ratio_correct_new = float(correct_new / total_new)
-        ratio_correct_total = float(correct / total)
+                correct += torch.sum(t == predicted)
+                total += torch.numel(t)
+    
+                correct_none += torch.sum((predicted == t) * (predicted == 0))
+                correct_old += torch.sum((predicted == t) * (predicted == 1))
+                correct_new += torch.sum((predicted == t) * (predicted == 2))
+                total_none += torch.sum(t == 0)
+                total_old += torch.sum(t == 1)
+                total_new += torch.sum(t == 2)
 
-        RESULTS['val_correct_0'].append(ratio_correct_none)
-        RESULTS['val_correct_1'].append(ratio_correct_old)
-        RESULTS['val_correct_2'].append(ratio_correct_new)
-        RESULTS['val_correct_total'].append(ratio_correct_total)
-        RESULTS['val_cross_entropy_loss'].append(loss_tracker)
+                loss = criterion(outputs, t)
+                loss_tracker += loss.item()
+                
+            ratio_correct_none = float(correct_none / total_none)
+            ratio_correct_old = float(correct_old / total_old)
+            ratio_correct_new = float(correct_new / total_new)
+            ratio_correct_total = float(correct / total)
 
-        print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
-        print(f'TOTAL VALIDATION ACCURACY {ratio_correct_total*100}%')
-        print(f'Cross-Entropy Loss: {loss_tracker}')
+            RESULTS['val_correct_0'].append(ratio_correct_none)
+            RESULTS['val_correct_1'].append(ratio_correct_old)
+            RESULTS['val_correct_2'].append(ratio_correct_new)
+            RESULTS['val_correct_total'].append(ratio_correct_total)
+            RESULTS['val_cross_entropy_loss'].append(loss_tracker)
+
+            print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
+            print(f'TOTAL VALIDATION ACCURACY {ratio_correct_total*100}%')
+            print(f'Cross-Entropy Loss: {loss_tracker}')
 
 def test_model(test_loader, model) -> tuple:
     """
@@ -223,12 +227,14 @@ def test_model(test_loader, model) -> tuple:
 
     return ratio_correct_none, ratio_correct_old, ratio_correct_new, ratio_correct_total
 
-
 def main(dpath) -> None:
+    print('Welcome, thank you for training a model today!')
+
     # Time the data loading / training
     start_time = time.time()
 
     # Initialize the data
+    print('********************************************\nInitializing Data')
     try:
         train_loader, val_loader, test_loader = prep_data_local(dpath)
     except MemoryError:
@@ -237,9 +243,20 @@ def main(dpath) -> None:
         #TODO: Implement custom data loaders
 
     # Initialize the model
+    print('********************************************\nInitializing Model')
     model = UNet(in_chan=7, n_classes=3, depth=3)
+    
+    # Fancy torch magic to magic model go wheeeeeeeeeeeewwwwwwwwweeeeeee fast!
+    print('Connecting model to GPU')
+    model.to(DEVICE)
+    if torch.cuda.device_count() > 1:
+        print("Using DataParallel")
+        model = DataParallel(model)
+    else:
+        print('Using One Device')
 
     # train the model
+    print('********************************************\Training Model')
     model = train_model(train_loader, val_loader, model, EPOCHS)
 
     # Assess how well the model did
