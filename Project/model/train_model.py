@@ -12,14 +12,17 @@ import time
 from unet import *
 from data_loading import *
 
-EPOCHS = 2500
+EPOCHS = 10
 EPOCH_STEPS = 1
-TRAIN_BATCH_SIZE=100
-TEST_BATCH_SIZE=50
-LABEL_WEIGHTS=[1e-4, 1e-2, 1]
+TRAIN_BATCH_SIZE=20
+TEST_BATCH_SIZE=20
+LABEL_WEIGHTS=[1, 1, 1]
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 RESULTS = {
+    'val_guess_0': [],
+    'val_guess_1': [],
+    'val_guess_2': [],
     'val_correct_0': [],
     'val_correct_1': [],
     'val_correct_2': [],
@@ -33,9 +36,13 @@ RESULTS = {
     'test_correct_0': [],
     'test_correct_1': [],
     'test_correct_2': [],
+    'test_guess_0': [],
+    'test_guess_1': [],
+    'test_guess_2': [],
     'test_correct_total': [],
     'train_time': 0.,
-    'epochs': EPOCHS
+    'epochs': EPOCHS,
+    'epoch-steps': EPOCH_STEPS
 }
 
 def prep_data_local(dpath) -> tuple:
@@ -130,12 +137,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             # Use the derivative information to update the parameters
             optimizer.step()
 
-            # _, predicted = torch.max(outputs.data, 1)
-            # total_train += float(t.size(0))
-            # correct_train += float((predicted == t).sum())
-
+        # Perform model validation after the training step
         if epoch % EPOCH_STEPS == 0:
-
             model.eval()
             # After each epoch, compute the validation set accuracy
             loss_tracker = 0
@@ -149,38 +152,65 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             total_none = 0
             total_old = 0
             total_new = 0
+            guess_none = 0
+            guess_old = 0
+            guess_new = 0
             print('Computing validation accuracy')
             for d, t in val_loader:
+                # Send the data to the GPU
                 d = d.to(DEVICE, dtype=torch.float32)
                 t = t.to(DEVICE, dtype=torch.long)
+
+                # Send the data through the model
                 outputs = model(d)
+
+                # Find which class (label) is most likely for each pixel in each image of the batch
                 predicted = torch.argmax(outputs, 1)
 
+                # Count the number of correct pixels, and the total number of pixels
                 correct += torch.sum(t == predicted)
                 total += torch.numel(t)
     
+                # Count the number of correct pixels in each class
                 correct_none += torch.sum((predicted == t) * (predicted == 0))
                 correct_old += torch.sum((predicted == t) * (predicted == 1))
                 correct_new += torch.sum((predicted == t) * (predicted == 2))
+
+                # Count the number of predictions for each class (used for overestimation analysis)
+                guess_none += torch.sum(predicted == 0)
+                guess_old += torch.sum(predicted == 1)
+                guess_new += torch.sum(predicted == 2)
+
+                # Guess the total number of pixels in each class
                 total_none += torch.sum(t == 0)
                 total_old += torch.sum(t == 1)
                 total_new += torch.sum(t == 2)
 
+                # Keep track of the loss
                 loss = criterion(outputs, t)
                 loss_tracker += loss.item()
                 
+            # Compute performance metrics
+            ratio_guess_none = float(guess_none / total_none)
+            ratio_guess_old = float(guess_old / total_old)
+            ratio_guess_new = float(guess_new / total_new)    
             ratio_correct_none = float(correct_none / total_none)
             ratio_correct_old = float(correct_old / total_old)
             ratio_correct_new = float(correct_new / total_new)
             ratio_correct_total = float(correct / total)
 
+            # Track the validation results
+            RESULTS['val_guess_0'].append(ratio_guess_none)
+            RESULTS['val_guess_1'].append(ratio_guess_old)
+            RESULTS['val_guess_2'].append(ratio_guess_new)
             RESULTS['val_correct_0'].append(ratio_correct_none)
             RESULTS['val_correct_1'].append(ratio_correct_old)
             RESULTS['val_correct_2'].append(ratio_correct_new)
             RESULTS['val_correct_total'].append(ratio_correct_total)
             RESULTS['val_cross_entropy_loss'].append(loss_tracker)
 
-            print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
+            print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.2f}%, 1: {ratio_correct_old*100:.2f}%, 2: {ratio_correct_new*100:.2f}%')
+            print(f'VALIDATION OVERFITTING: 0: {ratio_guess_none:.2f}, 1: {ratio_guess_old:.2f}, 2: {ratio_guess_new:.2f}')
             print(f'TOTAL VALIDATION ACCURACY {ratio_correct_total*100}%')
             print(f'Cross-Entropy Loss: {loss_tracker}')
     
@@ -201,34 +231,63 @@ def test_model(test_loader, model) -> tuple:
     total_none = 0
     total_old = 0
     total_new = 0
-
+    guess_none = 0
+    guess_old = 0
+    guess_new = 0
     print('Computing test accuracy')
     for d, t in test_loader:
+        # Send the data to the GPU
         d = d.to(DEVICE, dtype=torch.float32)
         t = t.to(DEVICE, dtype=torch.long)
+
+        # Send the data through the model
         outputs = model(d)
+        
+        # Find which class (label) is most likely for each pixel in each image of the batch
         predicted = torch.argmax(outputs, 1)
 
+        # Count the number of correct pixels, and the total number of pixels
         correct += torch.sum(t == predicted)
         total += torch.numel(t)
 
+        # Count the number of correct pixels in each class
         correct_none += torch.sum((predicted == t) * (predicted == 0))
         correct_old += torch.sum((predicted == t) * (predicted == 1))
         correct_new += torch.sum((predicted == t) * (predicted == 2))
+
+        # Count the number of predictions for each class (used for overestimation analysis)
+        guess_none += torch.sum(predicted == 0)
+        guess_old += torch.sum(predicted == 1)
+        guess_new += torch.sum(predicted == 2)
+
+        # Guess the total number of pixels in each class
         total_none += torch.sum(t == 0)
         total_old += torch.sum(t == 1)
         total_new += torch.sum(t == 2)
         
+    # Compute performance metrics
+    ratio_guess_none = float(guess_none / total_none)
+    ratio_guess_old = float(guess_old / total_old)
+    ratio_guess_new = float(guess_new / total_new)    
     ratio_correct_none = float(correct_none / total_none)
     ratio_correct_old = float(correct_old / total_old)
     ratio_correct_new = float(correct_new / total_new)
     ratio_correct_total = float(correct / total)
 
+    # Track the validation results
+    RESULTS['test_guess_0'].append(ratio_guess_none)
+    RESULTS['test_guess_1'].append(ratio_guess_old)
+    RESULTS['test_guess_2'].append(ratio_guess_new)
+    RESULTS['test_correct_0'].append(ratio_correct_none)
+    RESULTS['test_correct_1'].append(ratio_correct_old)
+    RESULTS['test_correct_2'].append(ratio_correct_new)
+    RESULTS['test_correct_total'].append(ratio_correct_total)
+
     print('\n***********************************************************')
-    print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
+    print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100:.2f}%, 1: {ratio_correct_old*100:.2f}%, 2: {ratio_correct_new*100:.2f}%')
+    print(f'\nTEST OVERFITTING: 0: {ratio_guess_none:.2f}, 1: {ratio_guess_old:.2f}, 2: {ratio_guess_new:.2f}')
     print(f'TOTAL TEST ACCURACY {ratio_correct_total*100}%')
 
-    return ratio_correct_none, ratio_correct_old, ratio_correct_new, ratio_correct_total
 
 def main(dpath) -> None:
     print('\nWelcome, thank you for training a model today!\n')
@@ -263,11 +322,7 @@ def main(dpath) -> None:
     model = train_model(train_loader, val_loader, model, EPOCHS)
 
     # Assess how well the model did
-    accuracy = test_model(test_loader, model)
-    RESULTS['test_correct_0'] = accuracy[0]
-    RESULTS['test_correct_1'] = accuracy[1]
-    RESULTS['test_correct_2'] = accuracy[2]
-    RESULTS['test_correct_total'] = accuracy[3]
+    test_model(test_loader, model)
 
     # End the clock
     elapsed_time = time.time() - start_time
