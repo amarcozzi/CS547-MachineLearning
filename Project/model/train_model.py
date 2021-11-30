@@ -11,6 +11,7 @@ import time
 from unet import *
 from data_loading import *
 
+EPOCHS = 100
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 RESULTS = {
@@ -31,28 +32,41 @@ RESULTS = {
     'train_time': 0.
 }
 
-def prep_data(dpath) -> tuple:
+def prep_data_local(dpath) -> tuple:
+    """
+    This function loads in all data into memory in the form of np arrays. It splits the data into training,
+    validation, and test groups based on a 70%, 15%, 15% basis, converts the np arrays to tensors, and finally
+    returns train, validate, and test loader objects.
+
+    The dataloaders are torch iterables which handle data batches and iteration.
+    """
     # Load all of the raster data into memory using np arrays
     RDL = RasterDataLoader(dpath, in_bands=7)
     X, y = RDL.get_test_training_loaders()
 
     # split the data into test and training data
-    X, X_test, y, y_test = train_test_split(X, y, test_size=0.75)
+    X, X_test_val, y, y_test_val = train_test_split(X, y, test_size=0.7)
+    X_val, X_test, y_val, y_test = train_test_split(X_test_val, y_test_val, test_size=0.5)
 
     # Convert the np arrays to tensors
     X = torch.from_numpy(X)
+    X_val = torch.from_numpy(X_val)
     X_test = torch.from_numpy(X_test)
     y = torch.from_numpy(y)
+    y_val = torch.from_numpy(y_val)
     y_test = torch.from_numpy(y_test)
 
     # Turn the tensors into the appropriate datatype
     X = X.to(torch.float32)
+    X_val= X_val.to(torch.float32)
     X_test = X_test.to(torch.float32)
     y = y.to(torch.long)
+    y_val = y_val.to(torch.long)
     y_test = y_test.to(torch.long)
 
     # Create dataset objects
     training_data = TensorDataset(X, y)
+    val_data = TensorDataset(X_val, y_val)
     test_data = TensorDataset(X_test, y_test)
 
     # Use the datasets to create train and test loader objects
@@ -61,15 +75,20 @@ def prep_data(dpath) -> tuple:
                                                batch_size=batch_size,
                                                shuffle=True)
     batch_size = 50
+    val_loader = torch.utils.data.DataLoader(dataset=val_data,
+                                              batch_size=batch_size,
+                                              shuffle=False)
+    batch_size = 50
     test_loader = torch.utils.data.DataLoader(dataset=test_data,
                                               batch_size=batch_size,
                                               shuffle=False)
-    return train_loader, test_loader
+    return train_loader, val_loader, test_loader
 
 
-def main(dpath):
-    train_loader, test_loader = prep_data(dpath)
-    model = UNet(in_chan=7, n_classes=3, depth=3)
+def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
+    """
+    This function trains the model using machine learning magic
+    """
     model.to(DEVICE)
 
     # criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
@@ -78,8 +97,6 @@ def main(dpath):
     criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4, weight_decay=1.0e-3)
-
-    epochs = 5000
 
     total_train = 0
     correct_train = 0
@@ -115,20 +132,20 @@ def main(dpath):
             # correct_train += float((predicted == t).sum())
 
         model.eval()
-        # After each epoch, compute the test set accuracy
+        # After each epoch, compute the validation set accuracy
         loss_tracker = 0
         total = 0.
         correct = 0.
-        # Loop over all the test examples and accumulate the number of correct results in each batch
+
+        # Loop over all the validation examples and accumulate the number of correct results in each batch
         correct_none = 0
         correct_old = 0
         correct_new = 0
         total_none = 0
         total_old = 0
         total_new = 0
-        # model.to('cpu')
-        print('Computing test accuracy')
-        for d, t in test_loader:
+        print('Computing validation accuracy')
+        for d, t in val_loader:
             d = d.to(DEVICE, dtype=torch.float32)
             t = t.to(DEVICE, dtype=torch.long)
             outputs = model(d)
@@ -158,20 +175,95 @@ def main(dpath):
         RESULTS['val_correct_total'].append(ratio_correct_total)
         RESULTS['val_cross_entropy_loss'].append(loss_tracker)
 
-        print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
-        print(f'TOTAL TEST ACCURACY {ratio_correct_total*100}%')
+        print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
+        print(f'TOTAL VALIDATION ACCURACY {ratio_correct_total*100}%')
         print(f'Cross-Entropy Loss: {loss_tracker}')
+
+def test_model(test_loader, model) -> tuple:
+    """
+    Test the model accuracy using the unseen test set data
+    """
+    model.eval()
+
+    # Loop over all the validation examples and accumulate the number of correct results in each batch
+    total = 0.
+    correct = 0.
+    correct_none = 0
+    correct_old = 0
+    correct_new = 0
+    total_none = 0
+    total_old = 0
+    total_new = 0
+
+    print('Computing test accuracy')
+    for d, t in test_loader:
+        d = d.to(DEVICE, dtype=torch.float32)
+        t = t.to(DEVICE, dtype=torch.long)
+        outputs = model(d)
+        predicted = torch.argmax(outputs, 1)
+
+        correct += torch.sum(t == predicted)
+        total += torch.numel(t)
+
+        correct_none += torch.sum((predicted == t) * (predicted == 0))
+        correct_old += torch.sum((predicted == t) * (predicted == 1))
+        correct_new += torch.sum((predicted == t) * (predicted == 2))
+        total_none += torch.sum(t == 0)
+        total_old += torch.sum(t == 1)
+        total_new += torch.sum(t == 2)
+        
+    ratio_correct_none = float(correct_none / total_none)
+    ratio_correct_old = float(correct_old / total_old)
+    ratio_correct_new = float(correct_new / total_new)
+    ratio_correct_total = float(correct / total)
+
+    print('\n***********************************************************')
+    print(f'\TEST ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
+    print(f'TOTAL TEST ACCURACY {ratio_correct_total*100}%')
+
+    return ratio_correct_none, ratio_correct_old, ratio_correct_new, ratio_correct_total
+
+
+def main(dpath) -> None:
+    # Time the data loading / training
+    start_time = time.time()
+
+    # Initialize the data
+    try:
+        train_loader, val_loader, test_loader = prep_data_local(dpath)
+    except MemoryError:
+        raise MemoryError('Out of memory. wah wah.')
+        quit()
+        #TODO: Implement custom data loaders
+
+    # Initialize the model
+    model = UNet(in_chan=7, n_classes=3, depth=3)
+
+    # train the model
+    model = train_model(train_loader, val_loader, model, EPOCHS)
+
+    # Assess how well the model did
+    accuracy = test_model(test_loader, model)
+    RESULTS['test_correct_0'], RESULTS['test_correct_1'], RESULTS['test_correct_2'], 
+    RESULTS['test_correct_total'] = accuracy
+
+    # End the clock
+    elapsed_time = time.time() - start_time
+    print(f'\n***************************************\nTook {elapsed_time:.2f} seconds to train')
+    RESULTS['train_time'] = elapsed_time
 
     # Save the model's state dictionary
     torch.save(model.state_dict(), 'model.nn')
 
 if __name__ == '__main__':
-    start_time = time.time()
+    
+    # Load in a passed data path
     if len(sys.argv) > 1:
         DATA_PATH = sys.argv[1]
+
+    # Run the training process
     main(DATA_PATH)
-    elapsed_time = time.time() - start_time
-    print(f'\n***************************************\nTook {elapsed_time:.2f} seconds to train')
-    RESULTS['train_time'] = elapsed_time
+    
+    # Save the performance data
     with open('results.json', 'w') as fout:
         json.dump(RESULTS, fout)

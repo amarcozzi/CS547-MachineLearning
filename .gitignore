@@ -49,3 +49,4 @@ Project/model/results.npy
 Project/model/results.json
 Project/model/time.txt
 Project/__pycache__/
+/Project/old_models/
