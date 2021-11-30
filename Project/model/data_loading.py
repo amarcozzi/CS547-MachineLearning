@@ -101,6 +101,7 @@ class RasterDataLoader:
         """
         Loads all of the rasters in the raster directory to memory as numpy arrays
         """
+        print('Initializing Data')
         X, y = self._initialize_np_arrays()
         for i in tqdm(range(len(self.raster_fnames))):
             raster_name = self.raster_fnames[i]

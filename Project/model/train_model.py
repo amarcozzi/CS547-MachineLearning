@@ -12,10 +12,10 @@ import time
 from unet import *
 from data_loading import *
 
-EPOCHS = 10
-EPOCH_STEPS = 5
-TRAIN_BATCH_SIZE=50
-TEST_BATCH_SIZE=20
+EPOCHS = 1000
+EPOCH_STEPS = 1
+TRAIN_BATCH_SIZE=100
+TEST_BATCH_SIZE=50
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 RESULTS = {
@@ -275,7 +275,8 @@ def main(dpath) -> None:
     torch.save(model.state_dict(), 'model.nn')
 
 if __name__ == '__main__':
-    
+    print('Begining launch sequence...')
+
     # Load in a passed data path
     if len(sys.argv) > 1:
         DATA_PATH = sys.argv[1]
