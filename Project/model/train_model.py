@@ -11,7 +11,9 @@ import time
 from unet import *
 from data_loading import *
 
-EPOCHS = 100
+EPOCHS = 50
+TRAIN_BATCH_SIZE=50
+TEST_BATCH_SIZE=20
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 RESULTS = {
@@ -29,7 +31,8 @@ RESULTS = {
     'test_correct_1': [],
     'test_correct_2': [],
     'test_correct_total': [],
-    'train_time': 0.
+    'train_time': 0.,
+    'epochs': EPOCHS
 }
 
 def prep_data_local(dpath) -> tuple:
@@ -70,17 +73,14 @@ def prep_data_local(dpath) -> tuple:
     test_data = TensorDataset(X_test, y_test)
 
     # Use the datasets to create train and test loader objects
-    batch_size = 50
     train_loader = torch.utils.data.DataLoader(dataset=training_data,
-                                               batch_size=batch_size,
+                                               batch_size=TRAIN_BATCH_SIZE,
                                                shuffle=True)
-    batch_size = 50
     val_loader = torch.utils.data.DataLoader(dataset=val_data,
-                                              batch_size=batch_size,
+                                              batch_size=TEST_BATCH_SIZE,
                                               shuffle=False)
-    batch_size = 50
     test_loader = torch.utils.data.DataLoader(dataset=test_data,
-                                              batch_size=batch_size,
+                                              batch_size=TEST_BATCH_SIZE,
                                               shuffle=False)
     return train_loader, val_loader, test_loader
 
