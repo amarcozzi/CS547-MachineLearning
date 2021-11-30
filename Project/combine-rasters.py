@@ -89,7 +89,7 @@ for year in range(start_year, end_year+1):
         #                                         maxy=lat_max + n * res, auto_expand=True)
 
         # Draw a box around the lat/long of the fire
-        accum_subset = accumulator[..., row_min:row_max, col_min:col_max]
+        accum_subset = accumulator.where(label_array == fid, 0)[..., row_min:row_max, col_min:col_max]
         if accum_subset.shape != (1, *max_shape):
             print(f'raster is the wrong shape - {fid} of {max_fid}')
             continue
@@ -163,8 +163,8 @@ for year in range(start_year, end_year+1):
             # Assign labels of 1 and 2 for previously and newly burnt pixels
             accum_today.values.squeeze()[tuple(accum_today > 0)] = 1
             accum_tomorrow = accum_subset.where(accum_subset.values.squeeze() <= jday + 1, 0)
-            accum_tomorrow.values.squeeze()[tuple(accum_tomorrow > 0)] = 1
-            accum_tomorrow.values.squeeze()[tuple(accum_subset == jday + 1)] = 2
+            accum_tomorrow.values.squeeze()[tuple(accum_tomorrow > 0)] = 0
+            accum_tomorrow.values.squeeze()[tuple(accum_subset == jday + 1)] = 1
 
             # Match the accumulated subset to the accumulated subset
             accum_today = accum_today.rio.reproject_match(accum_subset)
@@ -191,9 +191,9 @@ for year in range(start_year, end_year+1):
             all_together.rio.to_raster(os.path.join(data_path, out_folder, fname), dtype=np.float32)
             num_days += 1
 
-data = {'shape': max_shape,
-        'num-fires': num_fires,
-        'num-days': num_days,
-        'mean-days-per-fire': num_days/num_fires}
-with open(os.path.join(data_path, out_folder, 'metadata.json')) as fout:
-    json.dump(data, fout)
+# data = {'shape': max_shape,
+#         'num-fires': num_fires,
+#         'num-days': num_days,
+#         'mean-days-per-fire': num_days/num_fires}
+# with open(os.path.join(data_path, out_folder, 'metadata.json')) as fout:
+#     json.dump(data, fout)
