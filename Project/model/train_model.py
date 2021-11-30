@@ -12,7 +12,7 @@ import time
 from unet import *
 from data_loading import *
 
-EPOCHS = 100
+EPOCHS = 10
 EPOCH_STEPS = 5
 TRAIN_BATCH_SIZE=50
 TEST_BATCH_SIZE=20
@@ -182,6 +182,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
             print(f'TOTAL VALIDATION ACCURACY {ratio_correct_total*100}%')
             print(f'Cross-Entropy Loss: {loss_tracker}')
+    
+    return model
 
 def test_model(test_loader, model) -> tuple:
     """
@@ -222,19 +224,19 @@ def test_model(test_loader, model) -> tuple:
     ratio_correct_total = float(correct / total)
 
     print('\n***********************************************************')
-    print(f'\TEST ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
+    print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100:.4f}%, 1: {ratio_correct_old*100:.4f}%, 2: {ratio_correct_new*100:.4f}%')
     print(f'TOTAL TEST ACCURACY {ratio_correct_total*100}%')
 
     return ratio_correct_none, ratio_correct_old, ratio_correct_new, ratio_correct_total
 
 def main(dpath) -> None:
-    print('Welcome, thank you for training a model today!')
+    print('\nWelcome, thank you for training a model today!\n')
 
     # Time the data loading / training
     start_time = time.time()
 
     # Initialize the data
-    print('********************************************\nInitializing Data')
+    print('\n********************************************\nInitializing Data')
     try:
         train_loader, val_loader, test_loader = prep_data_local(dpath)
     except MemoryError:
@@ -243,7 +245,7 @@ def main(dpath) -> None:
         #TODO: Implement custom data loaders
 
     # Initialize the model
-    print('********************************************\nInitializing Model')
+    print('\n********************************************\nInitializing Model')
     model = UNet(in_chan=7, n_classes=3, depth=3)
     
     # Fancy torch magic to magic model go wheeeeeeeeeeeewwwwwwwwweeeeeee fast!
@@ -256,7 +258,7 @@ def main(dpath) -> None:
         print('Using One Device')
 
     # train the model
-    print('********************************************\Training Model')
+    print('\n********************************************\nTraining Model')
     model = train_model(train_loader, val_loader, model, EPOCHS)
 
     # Assess how well the model did
