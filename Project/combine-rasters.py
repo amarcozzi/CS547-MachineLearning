@@ -185,5 +185,5 @@ data = {'shape': max_shape,
         'num-fires': num_fires,
         'num-days': num_days,
         'mean-days-per-fire': num_days/num_fires}
-with open(os.path.join(data_path, out_folder, 'metadata.txt')) as fout:
+with open(os.path.join(data_path, out_folder, 'metadata.json')) as fout:
     json.dump(data, fout)
