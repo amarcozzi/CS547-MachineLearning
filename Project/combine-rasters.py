@@ -24,13 +24,15 @@ data_path = '/media/anthony/Storage_1/aviation_data'
 out_folder = 'dataset-big'
 
 # Load in the dem
+print('loading DEM')
 dem_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC16_Elev_200.tif'))
 
 # Load in sb40
+print('loading SB40')
 sb40_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC20_F40_200.tif'))
 
 max_shape = [64, 64]
-start_year = 2010
+start_year = 2001
 end_year = 2019
 start_month = 5
 end_month = 11
@@ -43,6 +45,7 @@ for year in range(start_year, end_year+1):
         if year != arg_year:
             continue
 
+    print('accumulating fires')
     accumulator = accumulator_loader(year, start_month, end_month, data_path)
     res = accumulator.rio.resolution()[0]
 
