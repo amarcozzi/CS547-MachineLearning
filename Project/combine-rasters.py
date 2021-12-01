@@ -12,7 +12,7 @@ from rasterio import windows
 from rioxarray.exceptions import NoDataInBounds
 from rioxarray.merge import merge_arrays
 
-sys.setrecursionlimit(10000)
+sys.setrecursionlimit(100000)
 
 if len(sys.argv) > 1:
     arg_year = int(sys.argv[1])
@@ -21,7 +21,7 @@ else:
 
 prune_data_flag = True
 data_path = '/media/anthony/Storage_1/aviation_data'
-out_folder = 'dataset-big'
+out_folder = 'dataset-test'
 
 # Load in the dem
 print('loading DEM')
@@ -33,7 +33,7 @@ sb40_raster = rioxr.open_rasterio(os.path.join(data_path, 'LC20_F40_200.tif'))
 
 max_shape = [64, 64]
 start_year = 2001
-end_year = 2019
+end_year = 2020
 start_month = 5
 end_month = 11
 
