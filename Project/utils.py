@@ -2,6 +2,8 @@ import os
 import datetime
 import numpy as np
 import rioxarray as rioxr
+from tqdm import tqdm
+from rioxarray.exceptions import NoDataInBounds
 
 
 def build_filename(year, month):
@@ -113,55 +115,48 @@ def prune_ts(l):
     return nl, range(min_ind + 1, max_ind)
 
 
-def get_max_shape(accumulator, label_array, prune_data_flag, res, n):
+def get_pad_span_and_shape(dem, accumulator, label_array, prune_data_flag, res, n):
     max_shape = [0, 0]
+    max_bounds = (0., 0., 0., 0.)
+    max_size = 0
 
     # Loop over all fires in the year
-    for fid in range(2, label_array.max()):
+    max_fid = label_array.max()
+    for fid in tqdm(range(2, max_fid)):
+        days = accumulator.values.squeeze()[label_array == fid]
+        start = int(days.min())
+        stop = int(days.max())
+        pixels_burned_time_series = [days[days == i].size for i in range(start, stop + 1)]
+        pruned_ts, ts_ind = prune_ts(pixels_burned_time_series)
+        num_days_in_ts = len(pruned_ts)
 
-        days = get_fire_days(accumulator, label_array, fid, prune_data_flag)
-        if not days:
+        # Let's get rid of the tiny fires
+        if num_days_in_ts < 5:
             continue
-        else:
-            start, stop = days
-
-        vals = find_fire_size(start, stop, accumulator, label_array, fid)
-        row_min, row_max, col_min, col_max, lat_min, lat_max, lon_min, lon_max = vals
-
-        accum_subset = accumulator[0, row_min - n:row_max + n, col_min - n:col_max + n]
-        shape = accum_subset.values.squeeze().shape
-        max_shape[0] = shape[0] if shape[0] > max_shape[0] else max_shape[0]
-        max_shape[1] = shape[1] if shape[1] > max_shape[1] else max_shape[1]
-
-    return max_shape
-
-
-def get_max_bounds(accumulator, label_array, prune_data_flag, res, n):
-    max_bounds = [0., 0., 0., 0.]
-
-    # Loop over all fires in the year
-    for fid in range(2, label_array.max()):
-
-        days = get_fire_days(accumulator, label_array, fid, prune_data_flag)
-        if not days:
-            continue
-        else:
-            start, stop = days
 
         vals = find_fire_size(start, stop, accumulator, label_array, fid)
         row_min, row_max, col_min, col_max, lat_min, lat_max, lon_min, lon_max = vals
 
         accum_subset = accumulator.rio.clip_box(minx=lon_min - n * res, miny=lat_min - n * res, maxx=lon_max + n * res,
                                                 maxy=lat_max + n * res, auto_expand=True)
-        accum_subset = accum_subset.rio.reproject('EPSG:5070', nodata=0.)
         bounds = accum_subset.rio.bounds()
 
-        max_bounds[0] = bounds[0] if bounds[0] > max_bounds[0] else max_bounds[0]
-        max_bounds[1] = bounds[1] if bounds[1] > max_bounds[1] else max_bounds[1]
-        max_bounds[2] = bounds[2] if bounds[2] > max_bounds[2] else max_bounds[2]
-        max_bounds[3] = bounds[3] if bounds[3] > max_bounds[3] else max_bounds[3]
+        # Sample the DEM and SB40 raster
+        try:
+            dem_subset = dem.rio.clip_box(*bounds)
+        except NoDataInBounds:
+            continue
 
-    return max_bounds
+        size = dem_subset.values.size
+        if size > max_size:
+            max_shape = accum_subset.values.squeeze().shape
+            max_bounds = accum_subset.rio.bounds()
+
+    return max_shape, max_bounds
+
+
+def get_bounds_span(accumulator, label_array, prune_data_flag, res, n):
+    return
 
 
 def find_fire_size(start, stop, accumulator, label_array, fid):
@@ -252,3 +247,63 @@ def accumulate_year(year, start_month, end_month, in_dir):
         accumulator = temp_raster.where(temp_raster > 0, accumulator, drop=False)
 
     return accumulator
+
+
+def accumulator_loader(year, start_month, end_month, data_path):
+    in_path = os.path.join(data_path, 'burned_area_files')
+    accum_path = os.path.join(data_path, 'accumulated_fires')
+    accum_name = f'{year}-fires.tif'
+
+    # Load in the accumulated fires if the file has already been created
+    fpath = os.path.join(accum_path, accum_name)
+    if os.path.exists(fpath):
+        return rioxr.open_rasterio(fpath)
+
+    # Run the accumulator
+    else:
+        accumulator = accumulator = accumulate_year(year, start_month, end_month, in_path)
+        accumulator = accumulator.rio.reproject('EPSG:5070', nodata=0.)
+        accumulator.rio.to_raster(fpath)
+        return accumulator
+
+def label_loader(data, year, path):
+    label_path = os.path.join(path, 'labeled_fires')
+    label_name = f'{year}-labeled-fires.npy'
+
+    # Load in the accumulated fires if the file has already been created
+    fpath = os.path.join(label_path, label_name)
+    if os.path.exists(fpath):
+        return np.load(fpath)
+    
+    label_array = label_array_func(data)
+    np.save(fpath, label_array)
+    return label_array
+
+
+def round_idx_to_max(row_min, row_max, col_min, col_max, max_shape, fid):
+    # Modify the max/min rows and columns to match the default size
+    row_diff = row_max - row_min
+    col_diff = col_max - col_min
+    if row_diff < max_shape[0]:
+        max_diff = max_shape[0] - row_diff
+        row_min -= max_diff // 2
+        row_max += max_diff // 2
+        if max_diff % 2 != 0:
+            row_max += 1
+    row_diff = row_max - row_min
+    if row_diff != max_shape[0]:
+        print(f'Shape error for fire {fid}')
+        quit()
+
+    if col_diff < max_shape[1]:
+        max_diff = max_shape[1] - col_diff
+        col_min -= max_diff // 2
+        col_max += max_diff // 2
+        if max_diff % 2 != 0:
+            col_max += 1
+    col_diff = col_max - col_min
+    if col_diff != max_shape[1]:
+        print(f'Shape error for fire {fid}')
+        quit()
+
+    return row_min, row_max, col_min, col_max

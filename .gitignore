@@ -42,3 +42,13 @@ Homework_3/marcozzi_hw3.zip
 Homework_2/Marcozzi-hw2.zip
 Homework_2/Marcozzi_CS547_Homework_2.pdf
 .idea
+Project/model/dataset
+Project/model/__pycache__
+Project/model/model.nn
+Project/model/results.npy
+Project/model/results.json
+Project/model/time.txt
+Project/__pycache__/
+/Project/old_models/
+Project/model/workspace.code-workspace
+Project/model/dataset-big/
