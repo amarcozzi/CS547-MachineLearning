@@ -17,11 +17,10 @@ EPOCHS = 1100
 EPOCH_STEPS = 1
 LR_MILESTONES=[350, 600, 750, 850, 950, 1000, 1050]
 TRAIN_BATCH_SIZE=50
-TEST_BATCH_SIZE=10000
+TEST_BATCH_SIZE=1000
 LABEL_WEIGHTS=[1, 500]
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset-big'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
-BEST = 1e32
 RESULTS = {
     'val_guess_0': [],
     'val_guess_1': [],
@@ -42,7 +41,8 @@ RESULTS = {
     'best_correct_total': 0.,
     'best_loss': 0.,
     'epochs': EPOCHS,
-    'epoch-steps': EPOCH_STEPS
+    'epoch-steps': EPOCH_STEPS,
+    'best': 1e12
 }
 
 def prep_data_local(dpath) -> tuple:
@@ -222,8 +222,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
 
             # Determine if this is the best model
             dist = np.abs(1 - ratio_guess_new)
-            if dist < BEST:
-                BEST = dist
+            if dist < RESULTS['best']:
+                RESULTS['best'] = dist
 
                 print(f'Saving epoch {epoch} as the current best model')
                 RESULTS['best_guess_0'] = ratio_guess_none
