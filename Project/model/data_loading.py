@@ -6,7 +6,6 @@ from torch.utils.data import Dataset
 from torch.utils.data.dataset import T_co
 from torchvision import datasets
 from torchvision.transforms import ToTensor
-import matplotlib.pyplot as plt
 import rioxarray as rioxr
 from tqdm import tqdm
 
