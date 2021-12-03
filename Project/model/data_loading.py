@@ -113,7 +113,7 @@ class RasterDataLoader:
 
             mask = raster.values[-1]
             y[i, ...] = mask
-            pass
+            
         return X, y
 
     def _initialize_np_arrays(self) -> tuple:

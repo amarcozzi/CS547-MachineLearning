@@ -12,12 +12,12 @@ import time
 from unet import *
 from data_loading import *
 
-EPOCHS = 10
-# EPOCHS = 1100
+TEST = False
+EPOCHS = 1100
 EPOCH_STEPS = 1
 LR_MILESTONES=[350, 600, 750, 850, 950, 1000, 1050]
-TRAIN_BATCH_SIZE=28
-TEST_BATCH_SIZE=28
+TRAIN_BATCH_SIZE=100
+TEST_BATCH_SIZE=10000
 LABEL_WEIGHTS=[1, 1000]
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset-big'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
@@ -58,29 +58,34 @@ def prep_data_local(dpath) -> tuple:
     X, y = RDL.get_test_training_loaders()
 
     # split the data into test and training data
-    X, X_test_val, y, y_test_val = train_test_split(X, y, test_size=0.7)
-    X_val, X_test, y_val, y_test = train_test_split(X_test_val, y_test_val, test_size=0.5)
+    X, X_val, y, y_val = train_test_split(X, y, test_size=0.8)
+    if TEST:
+        X_val, X_test, y_val, y_test = train_test_split(X_val, y_val, test_size=0.5)
 
     # Convert the np arrays to tensors
     X = torch.from_numpy(X)
     X_val = torch.from_numpy(X_val)
-    X_test = torch.from_numpy(X_test)
     y = torch.from_numpy(y)
     y_val = torch.from_numpy(y_val)
-    y_test = torch.from_numpy(y_test)
+    if TEST:
+        X_test = torch.from_numpy(X_test)
+        y_test = torch.from_numpy(y_test)
 
     # Turn the tensors into the appropriate datatype
     X = X.to(torch.float32)
     X_val= X_val.to(torch.float32)
-    X_test = X_test.to(torch.float32)
     y = y.to(torch.long)
     y_val = y_val.to(torch.long)
-    y_test = y_test.to(torch.long)
+    if TEST:
+        X_test = X_test.to(torch.float32)
+        y_test = y_test.to(torch.long)
 
     # Create dataset objects
     training_data = TensorDataset(X, y)
     val_data = TensorDataset(X_val, y_val)
-    test_data = TensorDataset(X_test, y_test)
+
+    if TEST:
+        test_data = TensorDataset(X_test, y_test)
 
     # Use the datasets to create train and test loader objects
     train_loader = torch.utils.data.DataLoader(dataset=training_data,
@@ -89,9 +94,13 @@ def prep_data_local(dpath) -> tuple:
     val_loader = torch.utils.data.DataLoader(dataset=val_data,
                                               batch_size=TEST_BATCH_SIZE,
                                               shuffle=False)
-    test_loader = torch.utils.data.DataLoader(dataset=test_data,
-                                              batch_size=TEST_BATCH_SIZE,
-                                              shuffle=False)
+    if TEST:
+        test_loader = torch.utils.data.DataLoader(dataset=test_data,
+                                                batch_size=TEST_BATCH_SIZE,
+                                                shuffle=False)
+    else:
+        test_loader = None
+
     return train_loader, val_loader, test_loader
 
 
@@ -107,7 +116,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     )
 
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
-    criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
 
     total_train = 0
     correct_train = 0
@@ -128,6 +138,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
 
             # Make a prediction based on the model
             outputs = model(d)
+
+            # labels = torch.nn.functional.one_hot(outputs)
 
             # Compute the loss
             loss = criterion(outputs, t)
@@ -211,6 +223,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             # Determine if this is the best model
             dist = np.abs(1 - ratio_guess_new)
             if dist < BEST:
+                BEST = dist
+
                 print(f'Saving epoch {epoch} as the current best model')
                 RESULTS['best_guess_0'] = ratio_guess_none
                 RESULTS['best_guess_1'] = ratio_guess_new
@@ -223,6 +237,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
                 torch.save(model.state_dict(), 'model.nn')
     
     return model
+
 
 def test_model(test_loader, model) -> tuple:
     """
@@ -318,12 +333,14 @@ def main(dpath) -> None:
         print('Using One Device')
 
     # train the model
-    print('\n********************************************\nTraining Model')
-    start_time = time.time()
-    model = train_model(train_loader, val_loader, model, EPOCHS)
+    if TEST:
+        print('\n********************************************\nTraining Model')
+        start_time = time.time()
+        model = train_model(train_loader, val_loader, model, EPOCHS)
 
     # Assess how well the model did
-    test_model(test_loader, model)
+    if TEST:
+        test_model(test_loader, model)
 
     # End the clock
     elapsed_time = time.time() - start_time
