@@ -23,6 +23,7 @@ DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset-big'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 BEST = 1e32
 RESULTS = {
+    'epoch_time': [],
     'val_guess_0': [],
     'val_guess_1': [],
     'val_correct_0': [],
@@ -123,6 +124,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     correct_train = 0
     # Loop over the data
     for epoch in range(epochs):
+        epoch_start = time.time()
         print(f'\nEPOCH {epoch+1}\n*******************************')
 
         model.train()
@@ -199,6 +201,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
                 loss = criterion(outputs, t)
                 loss_tracker += loss.item()
                 
+            epoch_elapsed_time = time.time() - epoch_start
+
             # Compute performance metrics
             ratio_guess_none = float(guess_none / total_none)
             ratio_guess_new = float(guess_new / total_new)    
@@ -213,12 +217,15 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             RESULTS['val_correct_1'].append(ratio_correct_new)
             RESULTS['val_correct_total'].append(ratio_correct_total)
             RESULTS['val_cross_entropy_loss'].append(loss_tracker)
+            RESULTS['epoch_time'].append(epoch_elapsed_time)
+
 
             # Print results
             print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.2f}%, 1: {ratio_correct_new*100:.2f}%')
             print(f'VALIDATION OVERFITTING: 0: {ratio_guess_none:.2f}, 1: {ratio_guess_new:.2f}')
             print(f'TOTAL VALIDATION ACCURACY {ratio_correct_total*100:.4f}%')
             print(f'Cross-Entropy Loss: {loss_tracker:.4f}')
+            print(f'Epoch took: {epoch_elapsed_time:.4f} seconds')
 
             # Determine if this is the best model
             dist = np.abs(1 - ratio_guess_new)
