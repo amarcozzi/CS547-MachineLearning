@@ -16,7 +16,7 @@ TEST = False
 EPOCHS = 1100
 EPOCH_STEPS = 1
 LR_MILESTONES=[350, 600, 750, 850, 950, 1000, 1050]
-TRAIN_BATCH_SIZE=100
+TRAIN_BATCH_SIZE=50
 TEST_BATCH_SIZE=10000
 LABEL_WEIGHTS=[1, 500]
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset-big'
@@ -308,7 +308,7 @@ def main(dpath) -> None:
     print('\nWelcome, thank you for training a model today!\n')
 
     # # Time the data loading / training
-    # start_time = time.time()
+    start_time = time.time()
 
     # Initialize the data
     print('\n********************************************\nInitializing Data')
@@ -333,10 +333,9 @@ def main(dpath) -> None:
         print('Using One Device')
 
     # train the model
-    if TEST:
-        print('\n********************************************\nTraining Model')
-        start_time = time.time()
-        model = train_model(train_loader, val_loader, model, EPOCHS)
+    print('\n********************************************\nTraining Model')
+    start_time = time.time()
+    model = train_model(train_loader, val_loader, model, EPOCHS)
 
     # Assess how well the model did
     if TEST:
