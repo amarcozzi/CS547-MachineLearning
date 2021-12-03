@@ -13,34 +13,34 @@ from unet import *
 from data_loading import *
 
 EPOCHS = 10
+# EPOCHS = 1100
 EPOCH_STEPS = 1
-TRAIN_BATCH_SIZE=20
-TEST_BATCH_SIZE=20
-LABEL_WEIGHTS=[1, 10, 1000]
-DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset'
+LR_MILESTONES=[350, 600, 750, 850, 950, 1000, 1050]
+TRAIN_BATCH_SIZE=28
+TEST_BATCH_SIZE=28
+LABEL_WEIGHTS=[1, 1000]
+DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset-big'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+BEST = 1e32
 RESULTS = {
     'val_guess_0': [],
     'val_guess_1': [],
-    'val_guess_2': [],
     'val_correct_0': [],
     'val_correct_1': [],
-    'val_correct_2': [],
     'val_correct_total': [],
     'val_cross_entropy_loss': [],
-    'train_correct_0': [],
-    'train_correct_1': [],
-    'train_correct_2': [],
-    'train_correct_total': [],
-    'train_cross_entropy_loss': [],
     'test_correct_0': [],
     'test_correct_1': [],
-    'test_correct_2': [],
     'test_guess_0': [],
     'test_guess_1': [],
-    'test_guess_2': [],
     'test_correct_total': [],
     'train_time': 0.,
+    'best_guess_0': 0.,
+    'best_guess_1': 0.,
+    'best_correct_0': 0.,
+    'best_correct_1': 0.,
+    'best_correct_total': 0.,
+    'best_loss': 0.,
     'epochs': EPOCHS,
     'epoch-steps': EPOCH_STEPS
 }
@@ -101,12 +101,13 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     """
     model.to(DEVICE)
 
-    # criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
-    # criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-2)
+    sched = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer, LR_MILESTONES, 0.5
+    )
+
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
-    criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
-    # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4, weight_decay=1.0e-3)
+    criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     total_train = 0
     correct_train = 0
@@ -136,6 +137,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
 
             # Use the derivative information to update the parameters
             optimizer.step()
+            sched.step()
 
         # Perform model validation after the training step
         if epoch % EPOCH_STEPS == 0:
@@ -147,13 +149,10 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
 
             # Loop over all the validation examples and accumulate the number of correct results in each batch
             correct_none = 0
-            correct_old = 0
             correct_new = 0
             total_none = 0
-            total_old = 0
             total_new = 0
             guess_none = 0
-            guess_old = 0
             guess_new = 0
             print('Computing validation accuracy')
             for d, t in val_loader:
@@ -165,7 +164,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
                 outputs = model(d)
 
                 # Find which class (label) is most likely for each pixel in each image of the batch
-                predicted = torch.argmax(outputs, 1)
+                probs = torch.sigmoid(outputs)
+                predicted = torch.argmax(probs, 1)
 
                 # Count the number of correct pixels, and the total number of pixels
                 correct += torch.sum(t == predicted)
@@ -173,18 +173,15 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     
                 # Count the number of correct pixels in each class
                 correct_none += torch.sum((predicted == t) * (predicted == 0))
-                correct_old += torch.sum((predicted == t) * (predicted == 1))
-                correct_new += torch.sum((predicted == t) * (predicted == 2))
+                correct_new += torch.sum((predicted == t) * (predicted == 1))
 
                 # Count the number of predictions for each class (used for overestimation analysis)
                 guess_none += torch.sum(predicted == 0)
-                guess_old += torch.sum(predicted == 1)
-                guess_new += torch.sum(predicted == 2)
+                guess_new += torch.sum(predicted == 1)
 
                 # Guess the total number of pixels in each class
                 total_none += torch.sum(t == 0)
-                total_old += torch.sum(t == 1)
-                total_new += torch.sum(t == 2)
+                total_new += torch.sum(t == 1)
 
                 # Keep track of the loss
                 loss = criterion(outputs, t)
@@ -192,27 +189,38 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
                 
             # Compute performance metrics
             ratio_guess_none = float(guess_none / total_none)
-            ratio_guess_old = float(guess_old / total_old)
             ratio_guess_new = float(guess_new / total_new)    
             ratio_correct_none = float(correct_none / total_none)
-            ratio_correct_old = float(correct_old / total_old)
             ratio_correct_new = float(correct_new / total_new)
             ratio_correct_total = float(correct / total)
 
             # Track the validation results
             RESULTS['val_guess_0'].append(ratio_guess_none)
-            RESULTS['val_guess_1'].append(ratio_guess_old)
-            RESULTS['val_guess_2'].append(ratio_guess_new)
+            RESULTS['val_guess_1'].append(ratio_guess_new)
             RESULTS['val_correct_0'].append(ratio_correct_none)
-            RESULTS['val_correct_1'].append(ratio_correct_old)
-            RESULTS['val_correct_2'].append(ratio_correct_new)
+            RESULTS['val_correct_1'].append(ratio_correct_new)
             RESULTS['val_correct_total'].append(ratio_correct_total)
             RESULTS['val_cross_entropy_loss'].append(loss_tracker)
 
-            print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.2f}%, 1: {ratio_correct_old*100:.2f}%, 2: {ratio_correct_new*100:.2f}%')
-            print(f'VALIDATION OVERFITTING: 0: {ratio_guess_none:.2f}, 1: {ratio_guess_old:.2f}, 2: {ratio_guess_new:.2f}')
+            # Print results
+            print(f'\nVALIDATION ACCURACIES: 0: {ratio_correct_none*100:.2f}%, 1: {ratio_correct_new*100:.2f}%')
+            print(f'VALIDATION OVERFITTING: 0: {ratio_guess_none:.2f}, 1: {ratio_guess_new:.2f}')
             print(f'TOTAL VALIDATION ACCURACY {ratio_correct_total*100:.4f}%')
             print(f'Cross-Entropy Loss: {loss_tracker:.4f}')
+
+            # Determine if this is the best model
+            dist = np.abs(1 - ratio_guess_new)
+            if dist < BEST:
+                print(f'Saving epoch {epoch} as the current best model')
+                RESULTS['best_guess_0'] = ratio_guess_none
+                RESULTS['best_guess_1'] = ratio_guess_new
+                RESULTS['best_correct_0'] = ratio_correct_none
+                RESULTS['best_correct_1'] = ratio_correct_new
+                RESULTS['best_correct_total'] = ratio_correct_total
+                RESULTS['best_cross_entropy_loss'] = loss_tracker
+
+                # Save the model
+                torch.save(model.state_dict(), 'model.nn')
     
     return model
 
@@ -226,13 +234,10 @@ def test_model(test_loader, model) -> tuple:
     total = 0.
     correct = 0.
     correct_none = 0
-    correct_old = 0
     correct_new = 0
     total_none = 0
-    total_old = 0
     total_new = 0
     guess_none = 0
-    guess_old = 0
     guess_new = 0
     print('Computing test accuracy')
     for d, t in test_loader:
@@ -244,7 +249,9 @@ def test_model(test_loader, model) -> tuple:
         outputs = model(d)
         
         # Find which class (label) is most likely for each pixel in each image of the batch
-        predicted = torch.argmax(outputs, 1)
+        # predicted = torch.argmax(outputs, 1)
+        probs = torch.sigmoid(outputs)
+        predicted = torch.argmax(probs, 1)
 
         # Count the number of correct pixels, and the total number of pixels
         correct += torch.sum(t == predicted)
@@ -252,48 +259,41 @@ def test_model(test_loader, model) -> tuple:
 
         # Count the number of correct pixels in each class
         correct_none += torch.sum((predicted == t) * (predicted == 0))
-        correct_old += torch.sum((predicted == t) * (predicted == 1))
-        correct_new += torch.sum((predicted == t) * (predicted == 2))
+        correct_new += torch.sum((predicted == t) * (predicted == 1))
 
         # Count the number of predictions for each class (used for overestimation analysis)
         guess_none += torch.sum(predicted == 0)
-        guess_old += torch.sum(predicted == 1)
-        guess_new += torch.sum(predicted == 2)
+        guess_new += torch.sum(predicted == 1)
 
         # Guess the total number of pixels in each class
         total_none += torch.sum(t == 0)
-        total_old += torch.sum(t == 1)
-        total_new += torch.sum(t == 2)
+        total_new += torch.sum(t == 1)
         
     # Compute performance metrics
     ratio_guess_none = float(guess_none / total_none)
-    ratio_guess_old = float(guess_old / total_old)
     ratio_guess_new = float(guess_new / total_new)    
     ratio_correct_none = float(correct_none / total_none)
-    ratio_correct_old = float(correct_old / total_old)
     ratio_correct_new = float(correct_new / total_new)
     ratio_correct_total = float(correct / total)
 
     # Track the validation results
     RESULTS['test_guess_0'].append(ratio_guess_none)
-    RESULTS['test_guess_1'].append(ratio_guess_old)
-    RESULTS['test_guess_2'].append(ratio_guess_new)
+    RESULTS['test_guess_1'].append(ratio_guess_new)
     RESULTS['test_correct_0'].append(ratio_correct_none)
-    RESULTS['test_correct_1'].append(ratio_correct_old)
-    RESULTS['test_correct_2'].append(ratio_correct_new)
+    RESULTS['test_correct_1'].append(ratio_correct_new)
     RESULTS['test_correct_total'].append(ratio_correct_total)
 
     print('\n***********************************************************')
-    print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100:.2f}%, 1: {ratio_correct_old*100:.2f}%, 2: {ratio_correct_new*100:.2f}%')
-    print(f'\nTEST OVERFITTING: 0: {ratio_guess_none:.2f}, 1: {ratio_guess_old:.2f}, 2: {ratio_guess_new:.2f}')
+    print(f'\nTEST ACCURACIES: 0: {ratio_correct_none*100:.2f}%, 1: {ratio_correct_new*100:.2f}%')
+    print(f'\nTEST OVERFITTING: 0: {ratio_guess_none:.2f}, 1: {ratio_guess_new:.2f}')
     print(f'TOTAL TEST ACCURACY {ratio_correct_total*100:.4f}%')
 
 
 def main(dpath) -> None:
     print('\nWelcome, thank you for training a model today!\n')
 
-    # Time the data loading / training
-    start_time = time.time()
+    # # Time the data loading / training
+    # start_time = time.time()
 
     # Initialize the data
     print('\n********************************************\nInitializing Data')
@@ -306,7 +306,7 @@ def main(dpath) -> None:
 
     # Initialize the model
     print('\n********************************************\nInitializing Model')
-    model = UNet(in_chan=7, n_classes=3, depth=3)
+    model = UNet(in_chan=7, n_classes=2, depth=3, skip=True, bndry_dropout=True)
     
     # Fancy torch magic to magic model go wheeeeeeeeeeeewwwwwwwwweeeeeee fast!
     print('Connecting model to GPU')
@@ -319,6 +319,7 @@ def main(dpath) -> None:
 
     # train the model
     print('\n********************************************\nTraining Model')
+    start_time = time.time()
     model = train_model(train_loader, val_loader, model, EPOCHS)
 
     # Assess how well the model did
@@ -330,7 +331,7 @@ def main(dpath) -> None:
     RESULTS['train_time'] = elapsed_time
 
     # Save the model's state dictionary
-    torch.save(model.state_dict(), 'model.nn')
+    # torch.save(model.state_dict(), 'model.nn')
 
 if __name__ == '__main__':
     print('\nBegining launch sequence...')
