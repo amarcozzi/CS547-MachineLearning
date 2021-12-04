@@ -121,10 +121,10 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     )
 
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
-    criterion = torch.nn.BCELoss()
+    # criterion = torch.nn.BCELoss()
     # criterion = torch.nn.BCEWithLogitsLoss()
     # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
-    # criterion = FocalLoss(DEVICE, alpha=0.01, gamma=2)
+    criterion = FocalLoss(DEVICE, alpha=0.0001, gamma=2)
 
     total_train = 0
     correct_train = 0

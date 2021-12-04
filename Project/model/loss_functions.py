@@ -32,7 +32,7 @@ class FocalLoss(nn.Module):
         self.gamma = torch.tensor(gamma).to(device, dtype=torch.float32)
 
     def forward(self, inputs, targets):
-        loss = cross_entropy(inputs, targets, reduction='none')
+        loss = cross_entropy(inputs, targets)
         at = self.alpha.gather(0, targets.data.view(-1)).reshape(targets.shape)
         pt = torch.exp(-loss)
         F_loss = at*(1-pt)**self.gamma * loss
