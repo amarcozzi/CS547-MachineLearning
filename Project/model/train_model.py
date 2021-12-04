@@ -194,17 +194,6 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
                 d = d.to(DEVICE, dtype=torch.float32)
                 t = t.to(DEVICE, dtype=torch.long)
 
-                # One-hot encode t
-                t = torch.nn.functional.one_hot(t)
-                t = torch.moveaxis(t, 3, 1)
-                t = t.to(DEVICE, dtype=torch.float32)
-
-                # Create label weights
-                labels = torch.clone(t).to(DEVICE)
-                labels = dilation(labels, kernel)
-                labels[:, 1, :, :] *= 499
-                labels[:, 1, :, :] += 1
-
                 # Send the data through the model
                 outputs = model(d)
 
@@ -229,6 +218,13 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
                 total_new += torch.sum(t == 1)
 
                 # Keep track of the loss
+                t = torch.nn.functional.one_hot(t)
+                t = torch.moveaxis(t, 3, 1)
+                t = t.to(DEVICE, dtype=torch.float32)
+                labels = torch.clone(t).to(DEVICE)
+                labels = dilation(labels, kernel)
+                labels[:, 1, :, :] *= 499
+                labels[:, 1, :, :] += 1
                 loss = binary_cross_entropy_with_logits(outputs, t, reduction='none')
                 loss *= labels
                 loss = loss.sum()
