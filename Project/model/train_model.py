@@ -79,7 +79,7 @@ def prep_data_local(dpath) -> tuple:
     # Turn the tensors into the appropriate datatype
     X = X.to(torch.float32)
     X_val= X_val.to(torch.float32)
-    y = y.to(torch.long)
+    y = y.to(torch.float32)
     y_val = y_val.to(torch.float32)
     if TEST:
         X_test = X_test.to(torch.float32)
@@ -271,7 +271,7 @@ def test_model(test_loader, model) -> tuple:
     for d, t in test_loader:
         # Send the data to the GPU
         d = d.to(DEVICE, dtype=torch.float32)
-        t = t.to(DEVICE, dtype=torch.long)
+        t = t.to(DEVICE, dtype=torch.float32)
 
         # Send the data through the model
         outputs = model(d)
