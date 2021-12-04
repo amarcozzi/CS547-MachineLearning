@@ -149,7 +149,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
 
             # Compute the loss
             probs = torch.sigmoid(outputs)
-            predicted = torch.argmax(probs, 1)
+            predicted = torch.argmax(probs, 1).to(DEVICE)
             loss = criterion(predicted, t)
 
             # Use backpropagation to compute the derivative of the loss with respect to the parameters
