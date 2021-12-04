@@ -121,7 +121,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     )
 
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
-    criterion = torch.nn.BCELoss(reduction='none')
+    criterion = torch.nn.BCELoss()
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
     # criterion = FocalLoss(DEVICE, alpha=0.25, gamma=2)
@@ -148,9 +148,9 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             outputs = model(d)
 
             # Compute the loss
-            probs = torch.sigmoid(outputs)
-            predicted = torch.argmax(probs, 1)
-            loss = criterion(predicted, t)
+            # probs = torch.sigmoid(outputs)
+            # predicted = torch.argmax(probs, 1)
+            loss = criterion(outputs, t)
 
             # Use backpropagation to compute the derivative of the loss with respect to the parameters
             loss.backward()
