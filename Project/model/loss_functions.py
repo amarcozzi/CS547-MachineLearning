@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 
 # class FocalLoss(nn.Module):
 #     def __init__(self, alpha=1, gamma=2, logits=False, reduce=False):
