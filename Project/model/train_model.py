@@ -18,8 +18,8 @@ TEST = False
 EPOCHS = 100
 EPOCH_STEPS = 1
 LR_MILESTONES=[350, 600, 750, 850, 950, 1000, 1050]
-TRAIN_BATCH_SIZE=1000
-TEST_BATCH_SIZE=1000
+TRAIN_BATCH_SIZE=10
+TEST_BATCH_SIZE=10
 LABEL_WEIGHTS=[1, 500]
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset-big'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
@@ -79,8 +79,8 @@ def prep_data_local(dpath) -> tuple:
     # Turn the tensors into the appropriate datatype
     X = X.to(torch.float32)
     X_val= X_val.to(torch.float32)
-    y = y.to(torch.float32)
-    y_val = y_val.to(torch.float32)
+    y = y.to(torch.long)
+    y_val = y_val.to(torch.long)
     if TEST:
         X_test = X_test.to(torch.float32)
         y_test = y_test.to(torch.long)
@@ -121,10 +121,10 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     )
 
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
-    criterion = torch.nn.BCELoss()
+    # criterion = torch.nn.BCELoss()
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
-    # criterion = FocalLoss(DEVICE, alpha=0.25, gamma=2)
+    criterion = FocalLoss(DEVICE, alpha=0.25, gamma=2)
 
     total_train = 0
     correct_train = 0
@@ -148,9 +148,9 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             outputs = model(d)
 
             # Compute the loss
-            probs = torch.sigmoid(outputs)
-            predicted = torch.argmax(probs, 1).to(DEVICE)
-            loss = criterion(predicted, t)
+            # probs = torch.sigmoid(outputs)
+            # predicted = torch.argmax(probs, 1).to(DEVICE)
+            loss = criterion(outputs, t)
 
             # Use backpropagation to compute the derivative of the loss with respect to the parameters
             loss.backward()
@@ -204,7 +204,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
                 total_new += torch.sum(t == 1)
 
                 # Keep track of the loss
-                loss = criterion(predicted, t)
+                loss = criterion(outputs, t)
                 loss_tracker += loss.item()
                 
             epoch_elapsed_time = time.time() - epoch_start
