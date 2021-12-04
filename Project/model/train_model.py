@@ -8,6 +8,7 @@ from torch.nn import DataParallel
 from torch.nn.functional import binary_cross_entropy
 from torch.utils.data import TensorDataset
 from sklearn.model_selection import train_test_split
+from loss_functions import FocalLoss
 import time
 
 from unet import *
@@ -47,41 +48,6 @@ RESULTS = {
     'epoch-steps': EPOCH_STEPS,
     'best': 1e12
 }
-
-# class FocalLoss(nn.Module):
-#     def __init__(self, alpha=1, gamma=2, logits=False, reduce=False):
-#         super(FocalLoss, self).__init__()
-#         self.alpha = alpha
-#         self.gamma = gamma
-#         self.logits = logits
-#         self.reduce = reduce
-
-#     def forward(self, inputs, targets):
-#         if self.logits:
-#             BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduce=False)
-#         else:
-#             BCE_loss = F.binary_cross_entropy(inputs, targets, reduce=False)
-#         pt = torch.exp(-BCE_loss)
-#         F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
-
-#         if self.reduce:
-#             return torch.mean(F_loss)
-#         else:
-#             return F_loss
-
-class FocalLoss(nn.Module):
-    "Non weighted version of Focal Loss"
-    def __init__(self, alpha=.25, gamma=2):
-        super(FocalLoss, self).__init__()
-        self.alpha = torch.tensor([alpha, 1-alpha]).cuda()
-        self.gamma = gamma
-
-    def forward(self, inputs, targets):
-        BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
-        at = self.alpha.gather(0, targets.data.view(-1))
-        pt = torch.exp(-BCE_loss)
-        F_loss = at*(1-pt)**self.gamma * BCE_loss
-        return F_loss.mean()
 
 
 def prep_data_local(dpath) -> tuple:
@@ -158,7 +124,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     # criterion = torch.nn.BCELoss(reduction='none')
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
-    criterion = FocalLoss(alpha=0.25, gamma=2)
+    criterion = FocalLoss(DEVICE, alpha=0.25, gamma=2)
 
     total_train = 0
     correct_train = 0
