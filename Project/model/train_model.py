@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from torch import optim
 from torch.nn import DataParallel
+from torch import binary_cross_entropy
 from torch.utils.data import TensorDataset
 from sklearn.model_selection import train_test_split
 import time
@@ -46,6 +47,27 @@ RESULTS = {
     'epoch-steps': EPOCH_STEPS,
     'best': 1e12
 }
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=1, gamma=2, logits=False, reduce=True):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.logits = logits
+        self.reduce = reduce
+
+    def forward(self, inputs, targets):
+        if self.logits:
+            BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduce=False)
+        else:
+            BCE_loss = F.binary_cross_entropy(inputs, targets, reduce=False)
+        pt = torch.exp(-BCE_loss)
+        F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+
+        if self.reduce:
+            return torch.mean(F_loss)
+        else:
+            return F_loss
 
 def prep_data_local(dpath) -> tuple:
     """
@@ -118,8 +140,10 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     )
 
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
+    # criterion = torch.nn.BCELoss(reduction='none')
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
+    # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
+    criterion = FocalLoss(alpha=0.25, gamma=2, logits=False, reduce=False)
 
     total_train = 0
     correct_train = 0
@@ -142,10 +166,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             # Make a prediction based on the model
             outputs = model(d)
 
-            # labels = torch.nn.functional.one_hot(outputs)
-
             # Compute the loss
-            loss = criterion(outputs, t)
+            loss = criterion(torch.sigmoid(outputs), t)
 
             # Use backpropagation to compute the derivative of the loss with respect to the parameters
             loss.backward()
@@ -199,7 +221,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
                 total_new += torch.sum(t == 1)
 
                 # Keep track of the loss
-                loss = criterion(outputs, t)
+                loss = criterion(torch.sigmoid(outputs), t)
                 loss_tracker += loss.item()
                 
             epoch_elapsed_time = time.time() - epoch_start
