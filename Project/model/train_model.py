@@ -15,9 +15,9 @@ from unet import *
 from data_loading import *
 
 TEST = False
-EPOCHS = 100
+EPOCHS = 1100
 EPOCH_STEPS = 1
-LR_MILESTONES=[350, 600, 750, 850, 950, 1000, 1050]
+LR_MILESTONES=[5, 100, 350, 600, 750, 850, 950, 1000, 1050]
 TRAIN_BATCH_SIZE=1000
 TEST_BATCH_SIZE=1000
 LABEL_WEIGHTS=[1, 500]
@@ -115,7 +115,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     """
     model.to(DEVICE)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-2)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4, weight_decay=1.0e-3)
     sched = torch.optim.lr_scheduler.MultiStepLR(
         optimizer, LR_MILESTONES, 0.5
     )
@@ -123,8 +123,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
     # criterion = torch.nn.BCELoss()
     # criterion = torch.nn.BCEWithLogitsLoss()
-    # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
-    criterion = FocalLoss(DEVICE, alpha=0.0001, gamma=2)
+    criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
+    # criterion = FocalLoss(DEVICE, alpha=0.0001, gamma=2)
 
     total_train = 0
     correct_train = 0
