@@ -33,7 +33,7 @@ class FocalLoss(nn.Module):
 
     def forward(self, inputs, targets):
         loss = cross_entropy(inputs, targets, reduction='none')
-        at = self.alpha.gather(0, targets.data.view(-1))
+        at = self.alpha.gather(0, targets.data.view(-1)).reshape(targets.shape)
         pt = torch.exp(-loss)
         F_loss = at*(1-pt)**self.gamma * loss
         return F_loss.mean()
