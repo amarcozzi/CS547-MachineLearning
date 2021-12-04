@@ -124,7 +124,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     # criterion = torch.nn.BCELoss()
     # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
-    criterion = FocalLoss(DEVICE, alpha=0.25, gamma=2)
+    criterion = FocalLoss(DEVICE, alpha=0.99, gamma=2)
 
     total_train = 0
     correct_train = 0
