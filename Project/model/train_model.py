@@ -13,15 +13,16 @@ from unet import *
 from data_loading import *
 
 TEST = False
-EPOCHS = 1100
+EPOCHS = 100
 EPOCH_STEPS = 1
 LR_MILESTONES=[350, 600, 750, 850, 950, 1000, 1050]
-TRAIN_BATCH_SIZE=50
+TRAIN_BATCH_SIZE=1000
 TEST_BATCH_SIZE=1000
 LABEL_WEIGHTS=[1, 500]
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset-big'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 RESULTS = {
+    'label_weight': LABEL_WEIGHTS,
     'epoch_time': [],
     'val_guess_0': [],
     'val_guess_1': [],
@@ -59,7 +60,7 @@ def prep_data_local(dpath) -> tuple:
     X, y = RDL.get_test_training_loaders()
 
     # split the data into test and training data
-    X, X_val, y, y_val = train_test_split(X, y, test_size=0.8)
+    X, X_val, y, y_val = train_test_split(X, y, train_size=0.9)
     if TEST:
         X_val, X_test, y_val, y_test = train_test_split(X_val, y_val, test_size=0.5)
 
