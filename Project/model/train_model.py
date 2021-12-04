@@ -121,8 +121,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
     )
 
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
-    # criterion = torch.nn.BCELoss()
-    criterion = torch.nn.BCEWithLogitsLoss()
+    criterion = torch.nn.BCELoss()
+    # criterion = torch.nn.BCEWithLogitsLoss()
     # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
     # criterion = FocalLoss(DEVICE, alpha=0.01, gamma=2)
 
@@ -139,7 +139,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
         print('Training Step')
         for d, t in train_loader:
             d = d.to(DEVICE, dtype=torch.float32)
-            t = t.to(DEVICE, dtype=torch.long)
+            t = t.to(DEVICE, dtype=torch.float32)
 
             # Zero out the optimizer's gradient buffer
             model.zero_grad()
@@ -148,9 +148,9 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             outputs = model(d)
 
             # Compute the loss
-            # probs = torch.sigmoid(outputs)
-            # predicted = torch.argmax(probs, 1).to(DEVICE)
-            loss = criterion(outputs, t)
+            probs = torch.sigmoid(outputs)
+            predicted = torch.argmax(probs, 1).to(DEVICE)
+            loss = criterion(predicted, t)
 
             # Use backpropagation to compute the derivative of the loss with respect to the parameters
             loss.backward()
