@@ -80,7 +80,7 @@ def prep_data_local(dpath) -> tuple:
     X = X.to(torch.float32)
     X_val= X_val.to(torch.float32)
     y = y.to(torch.long)
-    y_val = y_val.to(torch.long)
+    y_val = y_val.to(torch.float32)
     if TEST:
         X_test = X_test.to(torch.float32)
         y_test = y_test.to(torch.long)
