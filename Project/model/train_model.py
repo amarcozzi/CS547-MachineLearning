@@ -4,8 +4,9 @@ import json
 import numpy as np
 from tqdm import tqdm
 from torch import optim
+from kornia.morphology import dilation
 from torch.nn import DataParallel
-from torch.nn.functional import binary_cross_entropy
+from torch.nn.functional import binary_cross_entropy, one_hot, binary_cross_entropy_with_logits
 from torch.utils.data import TensorDataset
 from sklearn.model_selection import train_test_split
 from loss_functions import FocalLoss
@@ -109,7 +110,7 @@ def prep_data_local(dpath) -> tuple:
     return train_loader, val_loader, test_loader
 
 
-def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
+def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
     """
     This function trains the model using machine learning magic
     """
@@ -122,8 +123,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
 
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
     # criterion = torch.nn.BCELoss()
-    # criterion = torch.nn.BCEWithLogitsLoss()
-    criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
+    criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
+    # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
     # criterion = FocalLoss(DEVICE, alpha=0.0001, gamma=2)
 
     total_train = 0
@@ -141,6 +142,17 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             d = d.to(DEVICE, dtype=torch.float32)
             t = t.to(DEVICE, dtype=torch.long)
 
+            # One-hot encode t
+            t = torch.nn.functional.one_hot(t)
+            t = torch.moveaxis(t, 3, 1)
+            t = t.to(DEVICE, dtype=torch.float32)
+
+            # Create label weights
+            labels = torch.clone(t).to(DEVICE)
+            labels = dilation(labels, kernel)
+            labels[:, 1, :, :] *= 499
+            labels[:, 1, :, :] += 1
+
             # Zero out the optimizer's gradient buffer
             model.zero_grad()
 
@@ -148,15 +160,17 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             outputs = model(d)
 
             # Compute the loss
-            # probs = torch.sigmoid(outputs)
-            # predicted = torch.argmax(probs, 1).to(DEVICE)
-            loss = criterion(outputs, t)
+            loss = binary_cross_entropy_with_logits(outputs, t, reduction='none')
+            loss *= labels
+            loss = loss.sum()
 
             # Use backpropagation to compute the derivative of the loss with respect to the parameters
             loss.backward()
 
             # Use the derivative information to update the parameters
             optimizer.step()
+
+            # Update the scheduler
             sched.step()
 
         # Perform model validation after the training step
@@ -179,6 +193,17 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
                 # Send the data to the GPU
                 d = d.to(DEVICE, dtype=torch.float32)
                 t = t.to(DEVICE, dtype=torch.long)
+
+                # One-hot encode t
+                t = torch.nn.functional.one_hot(t)
+                t = torch.moveaxis(t, 3, 1)
+                t = t.to(DEVICE, dtype=torch.float32)
+
+                # Create label weights
+                labels = torch.clone(t).to(DEVICE)
+                labels = dilation(labels, kernel)
+                labels[:, 1, :, :] *= 499
+                labels[:, 1, :, :] += 1
 
                 # Send the data through the model
                 outputs = model(d)
@@ -204,7 +229,9 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
                 total_new += torch.sum(t == 1)
 
                 # Keep track of the loss
-                loss = criterion(outputs, t)
+                loss = binary_cross_entropy_with_logits(outputs, t, reduction='none')
+                loss *= labels
+                loss = loss.sum()
                 loss_tracker += loss.item()
                 
             epoch_elapsed_time = time.time() - epoch_start
@@ -345,10 +372,12 @@ def main(dpath) -> None:
     else:
         print('Using One Device')
 
+    kernel = torch.ones(3, 3).to(DEVICE)
+
     # train the model
     print('\n********************************************\nTraining Model')
     start_time = time.time()
-    model = train_model(train_loader, val_loader, model, EPOCHS)
+    model = train_model(train_loader, val_loader, model, EPOCHS, kernel)
 
     # Assess how well the model did
     if TEST:
