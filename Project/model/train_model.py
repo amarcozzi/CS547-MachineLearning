@@ -79,11 +79,11 @@ def prep_data_local(dpath) -> tuple:
     # Turn the tensors into the appropriate datatype
     X = X.to(torch.float32)
     X_val= X_val.to(torch.float32)
-    y = y.to(torch.uint8)
-    y_val = y_val.to(torch.uint8)
+    y = y.to(torch.long)
+    y_val = y_val.to(torch.long)
     if TEST:
         X_test = X_test.to(torch.float32)
-        y_test = y_test.to(torch.uint8)
+        y_test = y_test.to(torch.long)
 
     # Create dataset objects
     training_data = TensorDataset(X, y)
@@ -139,7 +139,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
         print('Training Step')
         for d, t in train_loader:
             d = d.to(DEVICE, dtype=torch.float32)
-            t = t.to(DEVICE, dtype=torch.uint8)
+            t = t.to(DEVICE, dtype=torch.long)
 
             # Zero out the optimizer's gradient buffer
             model.zero_grad()
@@ -178,7 +178,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
             for d, t in val_loader:
                 # Send the data to the GPU
                 d = d.to(DEVICE, dtype=torch.float32)
-                t = t.to(DEVICE, dtype=torch.uint8)
+                t = t.to(DEVICE, dtype=torch.long)
 
                 # Send the data through the model
                 outputs = model(d)
@@ -271,7 +271,7 @@ def test_model(test_loader, model) -> tuple:
     for d, t in test_loader:
         # Send the data to the GPU
         d = d.to(DEVICE, dtype=torch.float32)
-        t = t.to(DEVICE, dtype=torch.uint8)
+        t = t.to(DEVICE, dtype=torch.long)
 
         # Send the data through the model
         outputs = model(d)
