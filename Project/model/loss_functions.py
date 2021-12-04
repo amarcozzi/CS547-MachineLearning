@@ -29,7 +29,7 @@ class FocalLoss(nn.Module):
     def __init__(self, device, alpha=.25, gamma=2):
         super(FocalLoss, self).__init__()
         self.alpha = torch.tensor([alpha, 1-alpha]).to(device, dtype=torch.float32)
-        self.gamma = gamma.to(device, dtype=torch.float32)
+        self.gamma = torch.tensor(gamma).to(device, dtype=torch.float32)
 
     def forward(self, inputs, targets):
         loss = cross_entropy(inputs, targets, reduction='none')
