@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from torch import optim
 from torch.nn import DataParallel
-from torch import binary_cross_entropy
+from torch.nn.functional import binary_cross_entropy
 from torch.utils.data import TensorDataset
 from sklearn.model_selection import train_test_split
 import time
