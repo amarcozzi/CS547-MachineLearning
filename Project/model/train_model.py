@@ -149,7 +149,8 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
 
             # Compute the loss
             probs = torch.sigmoid(outputs)
-            loss = criterion(probs, t)
+            predicted = torch.argmax(probs, 1)
+            loss = criterion(predicted, t)
 
             # Use backpropagation to compute the derivative of the loss with respect to the parameters
             loss.backward()
@@ -203,7 +204,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
                 total_new += torch.sum(t == 1)
 
                 # Keep track of the loss
-                loss = criterion(torch.sigmoid(outputs), t)
+                loss = criterion(predicted, t)
                 loss_tracker += loss.item()
                 
             epoch_elapsed_time = time.time() - epoch_start
