@@ -139,7 +139,7 @@ def train_model(train_loader, val_loader, model, epochs) -> nn.Module:
         print('Training Step')
         for d, t in train_loader:
             d = d.to(DEVICE, dtype=torch.float32)
-            t = t.to(DEVICE, dtype=torch.float32)
+            t = t.to(DEVICE, dtype=torch.long)
 
             # Zero out the optimizer's gradient buffer
             model.zero_grad()
