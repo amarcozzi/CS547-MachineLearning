@@ -123,8 +123,8 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
 
     pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
     # criterion = torch.nn.BCELoss()
-    criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
-    # criterion=torch.nn.CrossEntropyLoss(weight=pos_weight)
+    # criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
+    criterion=torch.nn.CrossEntropyLoss(reduction='sum')
     # criterion = FocalLoss(DEVICE, alpha=0.0001, gamma=2)
 
     total_train = 0
@@ -143,15 +143,15 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
             t = t.to(DEVICE, dtype=torch.long)
 
             # One-hot encode t
-            t = torch.nn.functional.one_hot(t)
-            t = torch.moveaxis(t, 3, 1)
-            t = t.to(DEVICE, dtype=torch.float32)
+            # t = torch.nn.functional.one_hot(t)
+            # t = torch.moveaxis(t, 3, 1)
+            # t = t.to(DEVICE, dtype=torch.float32)
 
-            # Create label weights
-            labels = torch.clone(t).to(DEVICE)
-            labels = dilation(labels, kernel)
-            labels[:, 1, :, :] *= 499
-            labels[:, 1, :, :] += 1
+            # # Create label weights
+            # labels = torch.clone(t).to(DEVICE)
+            # labels = dilation(labels, kernel)
+            # labels[:, 1, :, :] *= 499
+            # labels[:, 1, :, :] += 1
 
             # Zero out the optimizer's gradient buffer
             model.zero_grad()
@@ -160,9 +160,10 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
             outputs = model(d)
 
             # Compute the loss
-            loss = binary_cross_entropy_with_logits(outputs, t, reduction='none')
-            loss *= labels
-            loss = loss.sum()
+            # loss = binary_cross_entropy_with_logits(outputs, t, reduction='none')
+            # loss *= labels
+            # loss = loss.sum()
+            loss = criterion(outputs, t)
 
             # Use backpropagation to compute the derivative of the loss with respect to the parameters
             loss.backward()
@@ -218,16 +219,17 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
                 total_new += torch.sum(t == 1)
 
                 # Keep track of the loss
-                t = torch.nn.functional.one_hot(t)
-                t = torch.moveaxis(t, 3, 1)
-                t = t.to(DEVICE, dtype=torch.float32)
-                labels = torch.clone(t).to(DEVICE)
-                labels = dilation(labels, kernel)
-                labels[:, 1, :, :] *= 499
-                labels[:, 1, :, :] += 1
-                loss = binary_cross_entropy_with_logits(outputs, t, reduction='none')
-                loss *= labels
-                loss = loss.sum()
+                # t = torch.nn.functional.one_hot(t)
+                # t = torch.moveaxis(t, 3, 1)
+                # t = t.to(DEVICE, dtype=torch.float32)
+                # labels = torch.clone(t).to(DEVICE)
+                # labels = dilation(labels, kernel)
+                # labels[:, 1, :, :] *= 499
+                # labels[:, 1, :, :] += 1
+                # loss = binary_cross_entropy_with_logits(outputs, t, reduction='none')
+                # loss *= labels
+                # loss = loss.sum()
+                loss = criterion(outputs, t)
                 loss_tracker += loss.item()
                 
             epoch_elapsed_time = time.time() - epoch_start
