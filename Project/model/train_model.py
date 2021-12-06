@@ -21,11 +21,9 @@ EPOCH_STEPS = 1
 LR_MILESTONES=[100, 350, 600, 750, 850, 950, 1000, 1050]
 TRAIN_BATCH_SIZE=1000
 TEST_BATCH_SIZE=1000
-LABEL_WEIGHTS=[1, 500]
 DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset-big'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 RESULTS = {
-    'label_weight': LABEL_WEIGHTS,
     'epoch_time': [],
     'val_guess_0': [],
     'val_guess_1': [],
@@ -109,6 +107,22 @@ def prep_data_local(dpath) -> tuple:
 
     return train_loader, val_loader, test_loader
 
+def compute_loss_with_label_mask(output, target, criterion, kernel):
+    # One-hot encode target
+    t_one_hot = torch.nn.functional.one_hot(target)
+    t_one_hot = torch.moveaxis(t_one_hot, 3, 1)
+    t_one_hot = t_one_hot.to(DEVICE, dtype=torch.float32)
+
+    # Create label weights
+    labels = torch.clone(t_one_hot).to(DEVICE)
+    labels = dilation(labels, kernel)
+    labels = (labels[:, 1, :, :] * 499) + 1
+
+    loss = criterion(output, target)
+    loss = loss * labels
+    loss = torch.sum(loss)
+
+    return loss
 
 def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
     """
@@ -121,11 +135,7 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
         optimizer, LR_MILESTONES, 0.5
     )
 
-    pos_weight = torch.from_numpy(np.array(LABEL_WEIGHTS)).to(torch.float).to(DEVICE)
-    # criterion = torch.nn.BCELoss()
-    # criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
-    criterion=torch.nn.CrossEntropyLoss(reduction='sum')
-    # criterion = FocalLoss(DEVICE, alpha=0.0001, gamma=2)
+    criterion=torch.nn.CrossEntropyLoss(reduction='none')
 
     total_train = 0
     correct_train = 0
@@ -142,17 +152,6 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
             d = d.to(DEVICE, dtype=torch.float32)
             t = t.to(DEVICE, dtype=torch.long)
 
-            # One-hot encode t
-            # t = torch.nn.functional.one_hot(t)
-            # t = torch.moveaxis(t, 3, 1)
-            # t = t.to(DEVICE, dtype=torch.float32)
-
-            # # Create label weights
-            # labels = torch.clone(t).to(DEVICE)
-            # labels = dilation(labels, kernel)
-            # labels[:, 1, :, :] *= 499
-            # labels[:, 1, :, :] += 1
-
             # Zero out the optimizer's gradient buffer
             model.zero_grad()
 
@@ -160,10 +159,7 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
             outputs = model(d)
 
             # Compute the loss
-            # loss = binary_cross_entropy_with_logits(outputs, t, reduction='none')
-            # loss *= labels
-            # loss = loss.sum()
-            loss = criterion(outputs, t)
+            loss = compute_loss_with_label_mask(outputs, t, criterion, kernel)
 
             # Use backpropagation to compute the derivative of the loss with respect to the parameters
             loss.backward()
@@ -219,17 +215,7 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
                 total_new += torch.sum(t == 1)
 
                 # Keep track of the loss
-                # t = torch.nn.functional.one_hot(t)
-                # t = torch.moveaxis(t, 3, 1)
-                # t = t.to(DEVICE, dtype=torch.float32)
-                # labels = torch.clone(t).to(DEVICE)
-                # labels = dilation(labels, kernel)
-                # labels[:, 1, :, :] *= 499
-                # labels[:, 1, :, :] += 1
-                # loss = binary_cross_entropy_with_logits(outputs, t, reduction='none')
-                # loss *= labels
-                # loss = loss.sum()
-                loss = criterion(outputs, t)
+                loss = compute_loss_with_label_mask(outputs, t, criterion, kernel)
                 loss_tracker += loss.item()
                 
             epoch_elapsed_time = time.time() - epoch_start
@@ -383,7 +369,7 @@ def main(dpath) -> None:
 
     # End the clock
     elapsed_time = time.time() - start_time
-    print(f'\n***************************************\nTook {elapsed_time:.2f} seconds to train')
+    print(f'\n***************************************\nTook {elapsed_time:.2f} seconds to train\n\n')
     RESULTS['train_time'] = elapsed_time
 
     # Save the model's state dictionary
