@@ -130,7 +130,7 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
     """
     model.to(DEVICE)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4, weight_decay=1.0e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-3)
     sched = torch.optim.lr_scheduler.MultiStepLR(
         optimizer, LR_MILESTONES, 0.5
     )
@@ -245,7 +245,7 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
             print(f'Epoch took: {epoch_elapsed_time:.4f} seconds')
 
             # Determine if this is the best model
-            dist = np.abs(1 - ratio_guess_new)
+            dist = np.abs(1 - ratio_guess_new) + np.abs(1 - ratio_correct_new)
             if dist < RESULTS['best']:
                 RESULTS['best'] = dist
 
