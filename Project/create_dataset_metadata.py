@@ -6,6 +6,8 @@ DATA_PATH = '/media/anthony/Storage_1/aviation_data/dataset-big'
 days = 0
 fires = []
 for fname in os.listdir(DATA_PATH):
+    if fname.split('.') == 'npy':
+        continue
     id = fname.split('-')[1]
     fires.append(id)
     days += 1

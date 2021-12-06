@@ -263,7 +263,7 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
     return model
 
 
-def test_model(test_loader, model) -> tuple:
+def test_model(test_loader, model):
     """
     Test the model accuracy using the unseen test set data
     """
