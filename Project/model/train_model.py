@@ -116,7 +116,7 @@ def compute_loss_with_label_mask(output, target, criterion, kernel):
     # Create label weights
     labels = torch.clone(t_one_hot).to(DEVICE)
     labels = dilation(labels, kernel)
-    labels = (labels[:, 1, :, :] * 499) + 1
+    labels = labels[:, 1, :, :]
 
     loss = criterion(output, target)
     loss = loss * labels
@@ -130,7 +130,7 @@ def train_model(train_loader, val_loader, model, epochs, kernel) -> nn.Module:
     """
     model.to(DEVICE)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4, weight_decay=1.0e-3)
     sched = torch.optim.lr_scheduler.MultiStepLR(
         optimizer, LR_MILESTONES, 0.5
     )
@@ -345,7 +345,7 @@ def main(dpath) -> None:
 
     # Initialize the model
     print('\n********************************************\nInitializing Model')
-    model = UNet(in_chan=7, n_classes=2, depth=3, skip=True, bndry_dropout=True)
+    model = UNet(in_chan=7, n_classes=2, depth=3)
     
     # Fancy torch magic to magic model go wheeeeeeeeeeeewwwwwwwwweeeeeee fast!
     print('Connecting model to GPU')
@@ -356,7 +356,7 @@ def main(dpath) -> None:
     else:
         print('Using One Device')
 
-    kernel = torch.ones(3, 3).to(DEVICE)
+    kernel = torch.ones(5, 5).to(DEVICE)
 
     # train the model
     print('\n********************************************\nTraining Model')
